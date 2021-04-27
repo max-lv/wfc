@@ -15,6 +15,8 @@ use rand::SeedableRng;
 const SHOW_CONNECTIONS: bool = false;
 const SHOW_TILESET: bool = false;
 const AUTO_TRY: bool = true;
+const STOP_ON_SUCCESS: bool = false;
+const STARTING_SEED: u64 = 144;
 
 const TILESIZE: u32 = 10;
 const SCALE: u32 = 5;
@@ -339,7 +341,10 @@ impl WFC {
         };
 
         // this direction has all connections available
-        if connections.len() == 2 {
+        // FIXME: 3 is hardcoded, but should be calculated.
+        //        probably should put it into WFC struct.
+        //        can be calculated from original tiles.
+        if connections.len() == 3 {
             return false;
         }
 
@@ -504,7 +509,7 @@ pub fn main() {
     });
     let ttiles = tiles.clone();
 
-    let mut seed = 42;
+    let mut seed = STARTING_SEED;
     let mut wfc = WFC::init(tiles);
     wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
 
@@ -523,12 +528,11 @@ pub fn main() {
                 wfc.propagate(tile);
             }
 
-            if wfc.debug_break {
+            if wfc.debug_break == STOP_ON_SUCCESS {
                 wfc.debug_break = false;
                 wfc.init_worldmap();
                 seed += 1;
                 wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
-
             } else {
                 break;
             }
