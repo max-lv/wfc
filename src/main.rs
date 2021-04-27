@@ -239,33 +239,6 @@ impl WFC {
         return rv;
     }
 
-    // fails for seed 50
-//    fn hard_recover(&mut self, square: (usize, usize)) -> Option<()> {
-//        // reset empty square
-//        // in all four directions reset tiles
-//        // recalculate their connections
-//        // recalculate empty square connections
-//        self.init_tile(square);
-//        for d in 0..4 {
-//            let sq = WFC::move_sq(square, d)?;
-//            self.init_tile(sq);
-//            for d in 0..4 {
-//                // inside this loop we gather connections for `t` squares, x is dead `square`,
-//                // `?` are `sq` from outer loop.
-//                // . . . . .
-//                // . . t ? .
-//                // . t ? x ?
-//                // . . t ? .
-//                // . . . . .
-//                let sq2 = WFC::move_sq(sq, d)?;
-//                let connections = self.gather_available_connections(sq2);
-//                connections[d]
-//
-//            }
-//        }
-//        return Some(());
-//    }
-
     fn wfc_step(&mut self) -> Option<(usize, usize)> {
         //let available_squares = self.find_undecided_squares();
         let available_squares = self.find_adjacent_undecided_squares();
@@ -318,7 +291,6 @@ impl WFC {
         }
         if ok_stack.len() == 0 {
             println!("error: tile-stack reduced to 0!!!  tile: {:?}", map_square);
-            //self.hard_recover((x,y));
             self.worldmap[x][y].clear();
             self.debug_break = true;
             return true;
