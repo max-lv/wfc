@@ -13,15 +13,19 @@ use rand::Rng;
 use rand::SeedableRng;
 
 const SHOW_CONNECTIONS: bool = false;
+const SHOW_TILESET: bool = false;
+const AUTO_TRY: bool = true;
+
 const TILESIZE: u32 = 10;
 const SCALE: u32 = 5;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
 const MAP_WIDTH: usize = (800/TILESIZE/SCALE) as usize;
 const MAP_HEIGHT: usize = (600/TILESIZE/SCALE) as usize;
 
-const CON_TYPE_COLORS: [Color;2] = [
+const CON_TYPE_COLORS: [Color;3] = [
     Color::RED,
     Color::CYAN,
+    Color::YELLOW,
 ];
 
 #[allow(unused_must_use)]
@@ -121,13 +125,13 @@ fn draw_stack_of_tiles<A>(canvas: &mut Canvas<Window>, tilemap: &Texture, font: 
 
 struct WFC {
     rng: rand::rngs::StdRng,
-    wfc_tile: WFC_Tile,
+    tiles: Vec<WFC_Tile>,
     worldmap: Vec<Vec<Vec<WFC_Tile>>>,
     debug_break: bool,
 }
 
 impl WFC {
-    fn init(wfc_tile: WFC_Tile) -> WFC {
+    fn init(tiles: Vec<WFC_Tile>) -> WFC {
         let mut worldmap: Vec<Vec<Vec<WFC_Tile>>>;
         worldmap = Vec::with_capacity(10);
         for x in 0..MAP_WIDTH {
@@ -138,7 +142,7 @@ impl WFC {
         }
 
         let mut wfc = WFC {
-            wfc_tile,
+            tiles,
             worldmap,
             rng: rand::rngs::StdRng::seed_from_u64(1),
             debug_break: false,
@@ -150,15 +154,18 @@ impl WFC {
     fn init_tile(&mut self, square: (usize, usize)) {
         let (x,y) = square;
         self.worldmap[x][y].clear();
-        for i in 0..4 {
-            // TODO: wfc_tile should be list of all tiles
-            let new_wfc_tile = WFC_Tile {
-                col: self.wfc_tile.col,
-                row: self.wfc_tile.row,
-                connection_types: rotate_array(self.wfc_tile.connection_types, i),
-                angle: (i*90) as u32,
-            };
-            self.worldmap[x][y].push(new_wfc_tile);
+        for tile in &self.tiles {
+            for i in 0..4 {
+                // TODO: worldmap could have stored u16 indexes into self.tiles, would be alot more
+                // compact!
+                let new_wfc_tile = WFC_Tile {
+                    col: tile.col,
+                    row: tile.row,
+                    connection_types: rotate_array(tile.connection_types, i),
+                    angle: (i*90) as u32,
+                };
+                self.worldmap[x][y].push(new_wfc_tile);
+            }
         }
     }
 
@@ -240,8 +247,9 @@ impl WFC {
     }
 
     fn find_lowest_undecided_squares(&self) -> Vec::<(usize, usize)> {
-        let mut available_squares = Vec::<Vec<(usize, usize)>>::with_capacity(5);
-        for _ in 0..5 {
+        let tiles_variations = self.tiles.len()*4 + 1;
+        let mut available_squares = Vec::<Vec<(usize, usize)>>::with_capacity(tiles_variations);
+        for _ in 0..tiles_variations {
             available_squares.push(Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT));
         }
         for x in 0..MAP_WIDTH {
@@ -442,26 +450,90 @@ pub fn main() {
     let tilemap = texture_creator.load_texture("./pipes_tileset.png").unwrap();
 
     // WFC Stuff
-    let wfc_tile = WFC_Tile {
+    // ---------
+    // INIT worldmap
+    let mut tiles = Vec::new();
+    tiles.push(WFC_Tile {
         col: 0,
         row: 0,
         connection_types: [1,1,0,1],
         angle: 0,
-    };
+    });
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 0,
+        connection_types: [0,0,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 0,
+        row: 1,
+        connection_types: [0,1,0,1],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 1,
+        row: 0,
+        connection_types: [1,1,1,1],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 1,
+        row: 1,
+        connection_types: [0,0,1,1],
+        angle: 0,
+    });
+    // connecting pipe
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 1,
+        connection_types: [0,1,0,2],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 3,
+        row: 0,
+        connection_types: [0,0,2,2],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 3,
+        row: 1,
+        connection_types: [0,2,0,2],
+        angle: 0,
+    });
+    let ttiles = tiles.clone();
 
-    // INIT worldmap
-    let mut wfc = WFC::init(wfc_tile);
-    wfc.rng = rand::rngs::StdRng::seed_from_u64(42);
-    println!("rng {}", wfc.rng.gen_range(0..10));
+    let mut seed = 42;
+    let mut wfc = WFC::init(tiles);
+    wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
 
-    for _ in 0..1 {
-        let tile = match wfc.wfc_step() {
-            Some(x) => x,
-            None => break,
-        };
-        wfc.propagate(tile);
+    if AUTO_TRY {
+        for try_num in 0..10_000 {
+            println!("Try #{} (seed: {})", try_num, seed);
+            loop {
+                if wfc.debug_break {
+                    break;
+                }
+                //println!("wfc_step");
+                let tile = match wfc.wfc_step() {
+                    Some(x) => x,
+                    None => break,
+                };
+                wfc.propagate(tile);
+            }
+
+            if wfc.debug_break {
+                wfc.debug_break = false;
+                wfc.init_worldmap();
+                seed += 1;
+                wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+            } else {
+                break;
+            }
+        }
     }
-
 
 // instead of going to each tile and changing their possible tiles list
 // we can:
@@ -487,8 +559,6 @@ pub fn main() {
   // IDEA: tbh stacks, in addition to holding tile indexes they should hold connection types they accept on each direction
   // if after changing stack, connection types changed, then we have to propagate in
   // those directions
-
-    let mut seed = 50;
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -542,22 +612,27 @@ pub fn main() {
         canvas.set_draw_color(Color::RGB(135, 135, 135));
         canvas.clear();
 
-
-        // draw world map
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                let stack = &wfc.worldmap[x][y];
-                if stack.len() == 1 {
-                    draw_wfc_tile(&mut canvas, &tilemap, &(stack[0]), x as u32, y as u32);
-                } else {
-                    draw_stack_of_tiles(
-                        &mut canvas,
-                        &tilemap,
-                        &font,
-                        &texture_creator,
-                        &stack,
-                        x as i32 * TILESIZE_SCALED as i32,
-                        y as i32 * TILESIZE_SCALED as i32);
+        if SHOW_TILESET {
+            for (i, tile) in ttiles.iter().enumerate() {
+                draw_wfc_tile(&mut canvas, &tilemap, tile, (i * 2) as u32, 4 as u32);
+            }
+        } else {
+            // draw world map
+            for x in 0..MAP_WIDTH {
+                for y in 0..MAP_HEIGHT {
+                    let stack = &wfc.worldmap[x][y];
+                    if stack.len() == 1 {
+                        draw_wfc_tile(&mut canvas, &tilemap, &(stack[0]), x as u32, y as u32);
+                    } else {
+                        draw_stack_of_tiles(
+                            &mut canvas,
+                            &tilemap,
+                            &font,
+                            &texture_creator,
+                            &stack,
+                            x as i32 * TILESIZE_SCALED as i32,
+                            y as i32 * TILESIZE_SCALED as i32);
+                    }
                 }
             }
         }
