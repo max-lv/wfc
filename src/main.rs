@@ -10,13 +10,14 @@ use sdl2::gfx::primitives::DrawRenderer;
 use std::time::Duration;
 use std::collections::HashSet;
 use rand::Rng;
+use rand::SeedableRng;
 
 const SHOW_CONNECTIONS: bool = false;
 const TILESIZE: u32 = 10;
 const SCALE: u32 = 5;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
-const MAP_WIDTH: usize = 16;
-const MAP_HEIGHT: usize = 12;
+const MAP_WIDTH: usize = 15;
+const MAP_HEIGHT: usize = 11;
 
 const CON_TYPE_COLORS: [Color;2] = [
     Color::RED,
@@ -119,7 +120,7 @@ fn draw_stack_of_tiles<A>(canvas: &mut Canvas<Window>, tilemap: &Texture, font: 
 }
 
 struct WFC {
-    rng: rand::rngs::ThreadRng,
+    rng: rand::rngs::StdRng,
     wfc_tile: WFC_Tile,
     worldmap: Vec<Vec<Vec<WFC_Tile>>>,
     debug_break: bool,
@@ -139,27 +140,33 @@ impl WFC {
         let mut wfc = WFC {
             wfc_tile,
             worldmap,
-            rng: rand::thread_rng(),
+            rng: rand::rngs::StdRng::seed_from_u64(1),
             debug_break: false,
         };
         wfc.init_worldmap();
         wfc
     }
 
+    fn init_tile(&mut self, square: (usize, usize)) {
+        let (x,y) = square;
+        self.worldmap[x][y].clear();
+        for i in 0..4 {
+            // TODO: wfc_tile should be list of all tiles
+            let new_wfc_tile = WFC_Tile {
+                col: self.wfc_tile.col,
+                row: self.wfc_tile.row,
+                connection_types: rotate_array(self.wfc_tile.connection_types, i),
+                angle: (i*90) as u32,
+            };
+            self.worldmap[x][y].push(new_wfc_tile);
+        }
+    }
+
     fn init_worldmap(&mut self) {
         // fill worldmap with stuff
         for x in 0..MAP_WIDTH {
             for y in 0..MAP_HEIGHT {
-                for i in 0..4 {
-                    // TODO: wfc_tile should be list of all tiles
-                    let new_wfc_tile = WFC_Tile {
-                        col: self.wfc_tile.col,
-                        row: self.wfc_tile.row,
-                        connection_types: rotate_array(self.wfc_tile.connection_types, i),
-                        angle: (i*90) as u32,
-                    };
-                    self.worldmap[x][y].push(new_wfc_tile);
-                }
+                self.init_tile((x,y));
             }
         }
     }
@@ -202,8 +209,66 @@ impl WFC {
         return available_squares;
     }
 
+    /// collects all undecided squares around already collapsed squares
+    fn find_adjacent_undecided_squares(&mut self) -> Vec::<(usize, usize)> {
+        let mut available_squares = HashSet::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT);
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
+                if self.worldmap[x][y].len() > 1 {
+                    continue;
+                }
+                for d in 0..4 {
+                    let (_x, _y) = match WFC::move_sq((x,y), d) {
+                        Some(sq) => sq,
+                        None => continue,
+                    };
+                    if self.worldmap[_x][_y].len() > 1 && self.worldmap[_x][_y].len() < 4 {
+                        available_squares.insert((_x,_y));
+                    }
+                }
+            }
+        }
+
+        if available_squares.len() == 0 {
+            let x = self.rng.gen_range(0..MAP_WIDTH);
+            let y = self.rng.gen_range(0..MAP_HEIGHT);
+            available_squares.insert((x,y));
+        }
+        let mut rv = available_squares.into_iter().collect::<Vec::<(usize, usize)>>();
+        rv.sort();
+        return rv;
+    }
+
+    // fails for seed 50
+//    fn hard_recover(&mut self, square: (usize, usize)) -> Option<()> {
+//        // reset empty square
+//        // in all four directions reset tiles
+//        // recalculate their connections
+//        // recalculate empty square connections
+//        self.init_tile(square);
+//        for d in 0..4 {
+//            let sq = WFC::move_sq(square, d)?;
+//            self.init_tile(sq);
+//            for d in 0..4 {
+//                // inside this loop we gather connections for `t` squares, x is dead `square`,
+//                // `?` are `sq` from outer loop.
+//                // . . . . .
+//                // . . t ? .
+//                // . t ? x ?
+//                // . . t ? .
+//                // . . . . .
+//                let sq2 = WFC::move_sq(sq, d)?;
+//                let connections = self.gather_available_connections(sq2);
+//                connections[d]
+//
+//            }
+//        }
+//        return Some(());
+//    }
+
     fn wfc_step(&mut self) -> Option<(usize, usize)> {
-        let available_squares = self.find_undecided_squares();
+        //let available_squares = self.find_undecided_squares();
+        let available_squares = self.find_adjacent_undecided_squares();
         //let available_squares = self.find_touched_undecided_squares();
         if available_squares.len() == 0 {
             println!("done");
@@ -211,14 +276,14 @@ impl WFC {
         }
         let map_square = *choose_random(&mut self.rng, &available_squares);
 
-        println!("Selected map square: {:?}", map_square);
+//        println!("Selected map square: {:?}", map_square);
 
         // observe
         let (x,y) = map_square;
         let selected_tile = *choose_random(&mut self.rng, &self.worldmap[x][y]);
         self.worldmap[x][y].clear(); // @question: is this does free() ?
         self.worldmap[x][y].push(selected_tile);
-        println!("Selected tile: {:?}", selected_tile);
+//        println!("Selected tile: {:?}", selected_tile);
         return Some(map_square);
 
         // TODO: propagate
@@ -253,10 +318,13 @@ impl WFC {
         }
         if ok_stack.len() == 0 {
             println!("error: tile-stack reduced to 0!!!  tile: {:?}", map_square);
+            //self.hard_recover((x,y));
+            self.worldmap[x][y].clear();
             self.debug_break = true;
+            return true;
         }
         self.worldmap[x][y] = ok_stack;
-        println!("update_tile_stack has changed connections {:?}", map_square);
+//        println!("update_tile_stack has changed connections {:?}", map_square);
         return true;
     }
 
@@ -276,17 +344,9 @@ impl WFC {
         return Some((x as usize, y as usize));
     }
 
-    fn propagate(&mut self, map_square: (usize, usize)) {
-        if self.debug_break {
-            return;
-        }
-
-        let (x,y) = map_square;
-
-        // instead of main_tile I want to gather all connections for all directions and pass them in
-        // if number of connections is 2 want to exit immidiatly.
-        //                             ^ equal to maximum number of connections for that direction
-        //                             ( have to be calculated for each tileset)
+    // finds all available connections from this tile for each direction
+    fn gather_available_connections(&self, square: (usize, usize)) -> Vec::<std::collections::HashSet<usize>> {
+        let (x,y) = square;
         let mut connections = Vec::<std::collections::HashSet<usize>>::with_capacity(4);
         for _ in 0..4 {
             connections.push(std::collections::HashSet::<usize>::new());
@@ -297,6 +357,15 @@ impl WFC {
                 connections[i].insert(tile.connection_types[i]);
             }
         }
+        return connections;
+    }
+
+    fn propagate(&mut self, map_square: (usize, usize)) {
+        if self.debug_break {
+            return;
+        }
+
+        let connections = self.gather_available_connections(map_square);
 
         // clear direction
         let is_recurse0 = self.update_tile_stack(&connections[0], map_square, 0);
@@ -312,7 +381,7 @@ impl WFC {
     }
 }
 
-fn choose_random<'a, Any>(rng: &mut rand::rngs::ThreadRng, vec: &'a Vec<Any>) -> &'a Any {
+fn choose_random<'a, Any>(rng: &mut rand::rngs::StdRng, vec: &'a Vec<Any>) -> &'a Any {
     &vec[rng.gen_range(0..vec.len())]
 }
 
@@ -350,6 +419,8 @@ pub fn main() {
 
     // INIT worldmap
     let mut wfc = WFC::init(wfc_tile);
+    wfc.rng = rand::rngs::StdRng::seed_from_u64(42);
+    println!("rng {}", wfc.rng.gen_range(0..10));
 
     for _ in 0..1 {
         let tile = match wfc.wfc_step() {
@@ -385,6 +456,8 @@ pub fn main() {
   // if after changing stack, connection types changed, then we have to propagate in
   // those directions
 
+    let mut seed = 50;
+
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -396,7 +469,31 @@ pub fn main() {
                     if wfc.debug_break {
                         println!("Locked via debug_break");
                     } else {
-                        println!("wfc_step");
+                        //println!("wfc_step");
+                        let tile = match wfc.wfc_step() {
+                            Some(x) => x,
+                            None => break,
+                        };
+                        wfc.propagate(tile);
+                    }
+                },
+                Event::KeyDown { keycode: Some(Keycode::N), .. } => {
+                    wfc.init_worldmap();
+                    seed += 1;
+                    wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
+                    println!("-- seed {} --", seed);
+                },
+                Event::KeyDown { keycode: Some(Keycode::R), .. } => {
+                    wfc.init_worldmap();
+                    wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
+                    println!("-- seed {} --", seed);
+                },
+                Event::KeyDown { keycode: Some(Keycode::Q), .. } => {
+                    for _ in 0..100 {
+                        if wfc.debug_break {
+                            break;
+                        }
+                        //println!("wfc_step");
                         let tile = match wfc.wfc_step() {
                             Some(x) => x,
                             None => break,
