@@ -8,7 +8,7 @@ use sdl2::rect::{Rect, Point};
 use sdl2::video::Window;
 use sdl2::gfx::primitives::DrawRenderer;
 use std::time::Duration;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -16,8 +16,8 @@ const SHOW_CONNECTIONS: bool = false;
 const TILESIZE: u32 = 10;
 const SCALE: u32 = 5;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
-const MAP_WIDTH: usize = 15;
-const MAP_HEIGHT: usize = 11;
+const MAP_WIDTH: usize = (800/TILESIZE/SCALE) as usize;
+const MAP_HEIGHT: usize = (600/TILESIZE/SCALE) as usize;
 
 const CON_TYPE_COLORS: [Color;2] = [
     Color::RED,
@@ -239,9 +239,69 @@ impl WFC {
         return rv;
     }
 
+    fn find_lowest_undecided_squares(&self) -> Vec::<(usize, usize)> {
+        let mut available_squares = Vec::<Vec<(usize, usize)>>::with_capacity(5);
+        for _ in 0..5 {
+            available_squares.push(Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT));
+        }
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
+                let len = self.worldmap[x][y].len();
+                if len == 1 {
+                    continue;
+                }
+                available_squares[len].push((x,y));
+            }
+        }
+
+        for x in &available_squares {
+            if x.len() > 0 {
+                return x.to_vec();
+            }
+        }
+        return available_squares[0].to_vec();
+    }
+
+    fn find_surrounded_undecided_squares(&self) -> Vec::<(usize, usize)> {
+        let mut available_squares = Vec::<Vec<(usize, usize)>>::with_capacity(5);
+        for _ in 0..5 {
+            available_squares.push(Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT));
+        }
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
+                if self.worldmap[x][y].len() == 1 {
+                    continue;
+                }
+                // count decided tiles surrounding this square
+                let mut count = 0;
+                let square = (x,y);
+                for d in 0..4 {
+                    let (x,y) = match WFC::move_sq(square, d) {
+                        Some(sq) => sq,
+                        None => continue,
+                    };
+                    if self.worldmap[x][y].len() == 1 {
+                        count += 1;
+                    }
+                }
+                available_squares[count].push((x,y));
+            }
+        }
+
+        for i in (0..4).rev() {
+            if available_squares[i].len() > 0 {
+                return available_squares[i].to_vec();
+            }
+        }
+        // always empty:
+        return available_squares[0].to_vec();
+    }
+
     fn wfc_step(&mut self) -> Option<(usize, usize)> {
         //let available_squares = self.find_undecided_squares();
-        let available_squares = self.find_adjacent_undecided_squares();
+        //let available_squares = self.find_adjacent_undecided_squares();
+        let available_squares = self.find_lowest_undecided_squares();
+        //let available_squares = self.find_surrounded_undecided_squares();
         //let available_squares = self.find_touched_undecided_squares();
         if available_squares.len() == 0 {
             println!("done");
@@ -456,12 +516,13 @@ pub fn main() {
                     println!("-- seed {} --", seed);
                 },
                 Event::KeyDown { keycode: Some(Keycode::R), .. } => {
+                    wfc.debug_break = false;
                     wfc.init_worldmap();
                     wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
                     println!("-- seed {} --", seed);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Q), .. } => {
-                    for _ in 0..100 {
+                    loop {
                         if wfc.debug_break {
                             break;
                         }
