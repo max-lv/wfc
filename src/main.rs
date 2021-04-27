@@ -14,7 +14,7 @@ use rand::SeedableRng;
 
 const SHOW_CONNECTIONS: bool = false;
 const SHOW_TILESET: bool = false;
-const AUTO_TRY: bool = true;
+const AUTO_TRY: bool = false;
 const STOP_ON_SUCCESS: bool = false;
 const STARTING_SEED: u64 = 144;
 
@@ -307,12 +307,30 @@ impl WFC {
         return available_squares[0].to_vec();
     }
 
+    fn find_squares_in_order(&self) -> Vec::<(usize, usize)> {
+        let mut available_squares = Vec::<(usize, usize)>::with_capacity(1);
+        for x in 0..MAP_WIDTH {
+            for y in 0..MAP_HEIGHT {
+                if self.worldmap[x][y].len() == 1 {
+                    continue;
+                }
+                available_squares.push((x,y));
+                return available_squares;
+            }
+        }
+
+        // always empty:
+        return available_squares;
+    }
+
     fn wfc_step(&mut self) -> Option<(usize, usize)> {
         //let available_squares = self.find_undecided_squares();
         //let available_squares = self.find_adjacent_undecided_squares();
-        let available_squares = self.find_lowest_undecided_squares();
+        //let available_squares = self.find_lowest_undecided_squares();
         //let available_squares = self.find_surrounded_undecided_squares();
         //let available_squares = self.find_touched_undecided_squares();
+        let available_squares = self.find_squares_in_order();
+
         if available_squares.len() == 0 {
             println!("done");
             return None
