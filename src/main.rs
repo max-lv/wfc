@@ -9,6 +9,7 @@ use sdl2::video::Window;
 use sdl2::gfx::primitives::DrawRenderer;
 use std::time::Duration;
 use std::collections::{HashMap, HashSet};
+use std::ops::IndexMut;
 use rand::Rng;
 use rand::SeedableRng;
 
@@ -18,7 +19,7 @@ const AUTO_TRY: bool = false;
 const STOP_ON_SUCCESS: bool = false;
 const STARTING_SEED: u64 = 144;
 
-const TILESIZE: u32 = 10;
+const TILESIZE: u32 = 8;
 const SCALE: u32 = 5;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
 const MAP_WIDTH: usize = (800/TILESIZE/SCALE) as usize;
@@ -128,21 +129,103 @@ fn draw_stack_of_tiles<A>(canvas: &mut Canvas<Window>, tilemap: &Texture, font: 
 struct WFC {
     rng: rand::rngs::StdRng,
     tiles: Vec<WFC_Tile>,
-    worldmap: Vec<Vec<Vec<WFC_Tile>>>,
+    worldmap: Worldmap,
     debug_break: bool,
 }
 
-impl WFC {
-    fn init(tiles: Vec<WFC_Tile>) -> WFC {
-        let mut worldmap: Vec<Vec<Vec<WFC_Tile>>>;
-        worldmap = Vec::with_capacity(10);
-        for x in 0..MAP_WIDTH {
-            worldmap.push(Vec::with_capacity(10));
-            for y in 0..MAP_HEIGHT {
-                worldmap[x].push(Vec::with_capacity(5));
-            }
-        }
+/*
+worldmap
+- will always be container of tiles
+- have to be indexed by (arbitrary?) index
+  x,y for 2d (tiles, triangles, hexes)
+  x,y,z for 3d
+  I want to index it in order
+- directions
+  2d has: 3 (trinagles), 4 (tiles), 6 (hexes)
+  - WFC and WFC_tile should be generic over directions. This will
+    bring type safety for my tilesets a.k.a saves me headache of checking if all tiles in tileset have neccesery directions.
+- I don't care about tiles or their rotation, I just need Vec<tile> and tile must have directions.
+  main task I'm solving: given 'two stacks of tiles and direction' remove all non-compatible tiles.
+*/
 
+// 3d worldmap
+// struct with vec-vec-of-T
+// index generic ???
+// iter() over all indexes
+
+struct Worldmap {
+    values: Vec<Vec<WFC_Tile>>,
+    size: Vec<usize>,
+    len: usize,
+}
+
+impl Worldmap {
+    fn new2d(x: usize, y: usize) -> Worldmap {
+        Worldmap {
+            values: vec![vec![]; x*y],
+            size: vec![x, y],
+            len: x*y,
+        }
+    }
+    fn new3d(x: usize, y: usize, z: usize) -> Worldmap {
+        Worldmap {
+            values: vec![vec![]; x*y*z],
+            size: vec![x, y, z],
+            len: x*y*z,
+        }
+    }
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+
+// !!WATCH YOUR STEP!! Rust Hell Below
+// -----------------------------------
+impl std::ops::Index<usize> for Worldmap {
+    type Output = Vec<WFC_Tile>;
+    fn index<'a>(&'a self, idx: usize) -> &'a Vec<WFC_Tile> {
+        return &self.values[idx]
+    }
+}
+
+impl std::ops::IndexMut<usize> for Worldmap {
+    fn index_mut<'a>(&'a mut self, idx: usize) -> &'a mut Vec<WFC_Tile> {
+        return &mut self.values[idx]
+    }
+}
+impl std::ops::Index<(usize, usize)> for Worldmap {
+    type Output = Vec<WFC_Tile>;
+    fn index<'a>(&'a self, idx: (usize, usize)) -> &'a Vec<WFC_Tile> {
+        let (x, y) = idx;
+        return &self.values[x + y*self.size[0]]
+    }
+}
+
+impl std::ops::IndexMut<(usize, usize)> for Worldmap {
+    fn index_mut<'a>(&'a mut self, idx: (usize, usize)) -> &'a mut Vec<WFC_Tile> {
+        let (x, y) = idx;
+        return &mut self.values[x + y*self.size[0]]
+    }
+}
+
+impl std::ops::Index<(usize, usize, usize)> for Worldmap {
+    type Output = Vec<WFC_Tile>;
+    fn index<'a>(&'a self, idx: (usize, usize, usize)) -> &'a Vec<WFC_Tile> {
+        let (x, y, z) = idx;
+        return &self.values[x + y*self.size[1] + z*self.size[2]]
+    }
+}
+
+impl std::ops::IndexMut<(usize, usize, usize)> for Worldmap {
+    fn index_mut<'a>(&'a mut self, idx: (usize, usize, usize)) -> &'a mut Vec<WFC_Tile> {
+        let (x, y, z) = idx;
+        return &mut self.values[x + y*self.size[0] + z*self.size[0]*self.size[1]]
+    }
+}
+
+impl WFC {
+    // TODO: worldmap should hold indexes into tiles
+    fn init(worldmap: Worldmap, tiles: Vec<WFC_Tile>) -> WFC {
         let mut wfc = WFC {
             tiles,
             worldmap,
@@ -153,10 +236,10 @@ impl WFC {
         wfc
     }
 
-    fn init_tile(&mut self, square: (usize, usize)) {
-        let (x,y) = square;
-        self.worldmap[x][y].clear();
-        for tile in &self.tiles {
+    // FIXME: Rust sucks, try calling: `self.init_tile(&mut self.worldmap[i])` and feel the pain ...
+    fn meh_init_tile(tiles: &Vec<WFC_Tile>, square: &mut Vec<WFC_Tile>) {
+        square.clear();
+        for tile in tiles {
             for i in 0..4 {
                 // TODO: worldmap could have stored u16 indexes into self.tiles, would be alot more
                 // compact!
@@ -166,17 +249,19 @@ impl WFC {
                     connection_types: rotate_array(tile.connection_types, i),
                     angle: (i*90) as u32,
                 };
-                self.worldmap[x][y].push(new_wfc_tile);
+                square.push(new_wfc_tile);
             }
         }
     }
 
+    fn init_tile(&mut self, square: &mut Vec<WFC_Tile>) {
+        WFC::meh_init_tile(&self.tiles, square);
+    }
+
     fn init_worldmap(&mut self) {
         // fill worldmap with stuff
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                self.init_tile((x,y));
-            }
+        for i in 0..self.worldmap.len {
+            WFC::meh_init_tile(&self.tiles, &mut self.worldmap[i]);
         }
     }
 
@@ -184,7 +269,7 @@ impl WFC {
         // debug print worldmap
         for x in 0..MAP_WIDTH {
             for y in 0..MAP_HEIGHT {
-                print!("{:?} ", self.worldmap[x][y].len());
+                print!("{:?} ", self.worldmap[(x,y)].len());
             }
             println!("");
         }
@@ -195,7 +280,7 @@ impl WFC {
         let mut available_squares = Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT);
         for x in 0..MAP_WIDTH {
             for y in 0..MAP_HEIGHT {
-                if self.worldmap[x][y].len() == 1 {
+                if self.worldmap[(x,y)].len() == 1 {
                     continue;
                 }
                 available_squares.push((x,y));
@@ -209,7 +294,7 @@ impl WFC {
         let mut available_squares = Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT);
         for x in 0..MAP_WIDTH {
             for y in 0..MAP_HEIGHT {
-                if self.worldmap[x][y].len() == 1 || self.worldmap[x][y].len() == 3 {
+                if self.worldmap[(x,y)].len() == 1 || self.worldmap[(x,y)].len() == 3 {
                     continue;
                 }
                 available_squares.push((x,y));
@@ -223,7 +308,7 @@ impl WFC {
         let mut available_squares = HashSet::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT);
         for x in 0..MAP_WIDTH {
             for y in 0..MAP_HEIGHT {
-                if self.worldmap[x][y].len() > 1 {
+                if self.worldmap[(x,y)].len() > 1 {
                     continue;
                 }
                 for d in 0..4 {
@@ -231,7 +316,7 @@ impl WFC {
                         Some(sq) => sq,
                         None => continue,
                     };
-                    if self.worldmap[_x][_y].len() > 1 && self.worldmap[_x][_y].len() < 4 {
+                    if self.worldmap[(_x,_y)].len() > 1 && self.worldmap[(_x,_y)].len() < 4 {
                         available_squares.insert((_x,_y));
                     }
                 }
@@ -256,7 +341,7 @@ impl WFC {
         }
         for x in 0..MAP_WIDTH {
             for y in 0..MAP_HEIGHT {
-                let len = self.worldmap[x][y].len();
+                let len = self.worldmap[(x,y)].len();
                 if len == 1 {
                     continue;
                 }
@@ -279,7 +364,7 @@ impl WFC {
         }
         for x in 0..MAP_WIDTH {
             for y in 0..MAP_HEIGHT {
-                if self.worldmap[x][y].len() == 1 {
+                if self.worldmap[(x,y)].len() == 1 {
                     continue;
                 }
                 // count decided tiles surrounding this square
@@ -290,7 +375,7 @@ impl WFC {
                         Some(sq) => sq,
                         None => continue,
                     };
-                    if self.worldmap[x][y].len() == 1 {
+                    if self.worldmap[(x,y)].len() == 1 {
                         count += 1;
                     }
                 }
@@ -311,7 +396,7 @@ impl WFC {
         let mut available_squares = Vec::<(usize, usize)>::with_capacity(1);
         for x in 0..MAP_WIDTH {
             for y in 0..MAP_HEIGHT {
-                if self.worldmap[x][y].len() == 1 {
+                if self.worldmap[(x,y)].len() == 1 {
                     continue;
                 }
                 available_squares.push((x,y));
@@ -341,9 +426,9 @@ impl WFC {
 
         // observe
         let (x,y) = map_square;
-        let selected_tile = *choose_random(&mut self.rng, &self.worldmap[x][y]);
-        self.worldmap[x][y].clear(); // @question: is this does free() ?
-        self.worldmap[x][y].push(selected_tile);
+        let selected_tile = *choose_random(&mut self.rng, &self.worldmap[(x,y)]);
+        self.worldmap[(x,y)].clear(); // @question: is this does free() ?
+        self.worldmap[(x,y)].push(selected_tile);
 //        println!("Selected tile: {:?}", selected_tile);
         return Some(map_square);
 
@@ -362,13 +447,13 @@ impl WFC {
         // FIXME: 3 is hardcoded, but should be calculated.
         //        probably should put it into WFC struct.
         //        can be calculated from original tiles.
-        if connections.len() == 3 {
+        if connections.len() == 4 {
             return false;
         }
 
         let mut ok_stack = Vec::<WFC_Tile>::with_capacity(5);
 
-        let stack = &self.worldmap[x][y];
+        let stack = &self.worldmap[(x,y)];
         for tile in stack {
             // connection_types: [N, E, S, W]
             //                    0  1  2  3
@@ -377,16 +462,16 @@ impl WFC {
             }
             ok_stack.push(*tile);
         }
-        if self.worldmap[x][y].len() == ok_stack.len() {
+        if self.worldmap[(x,y)].len() == ok_stack.len() {
             return false;
         }
         if ok_stack.len() == 0 {
             println!("error: tile-stack reduced to 0!!!  tile: {:?}", map_square);
-            self.worldmap[x][y].clear();
+            self.worldmap[(x,y)].clear();
             self.debug_break = true;
             return true;
         }
-        self.worldmap[x][y] = ok_stack;
+        self.worldmap[(x,y)] = ok_stack;
 //        println!("update_tile_stack has changed connections {:?}", map_square);
         return true;
     }
@@ -414,7 +499,7 @@ impl WFC {
         for _ in 0..4 {
             connections.push(std::collections::HashSet::<usize>::new());
         }
-        let stack = &self.worldmap[x][y];
+        let stack = &self.worldmap[(x,y)];
         for tile in stack {
             for i in 0..4 {
                 connections[i].insert(tile.connection_types[i]);
@@ -470,7 +555,63 @@ pub fn main() {
 
     // load font
     let font = ttf_context.load_font("/home/terra/.local/share/fonts/Ubuntu-B.ttf", 128).unwrap();
-    let tilemap = texture_creator.load_texture("./pipes_tileset.png").unwrap();
+//    let tilemap = texture_creator.load_texture("./pipes_tileset.png").unwrap();
+//
+//    // WFC Stuff
+//    // ---------
+//    // INIT worldmap
+//    let mut tiles = Vec::new();
+//    tiles.push(WFC_Tile {
+//        col: 0,
+//        row: 0,
+//        connection_types: [1,1,0,1],
+//        angle: 0,
+//    });
+//    tiles.push(WFC_Tile {
+//        col: 2,
+//        row: 0,
+//        connection_types: [0,0,0,0],
+//        angle: 0,
+//    });
+//    tiles.push(WFC_Tile {
+//        col: 0,
+//        row: 1,
+//        connection_types: [0,1,0,1],
+//        angle: 0,
+//    });
+//    tiles.push(WFC_Tile {
+//        col: 1,
+//        row: 0,
+//        connection_types: [1,1,1,1],
+//        angle: 0,
+//    });
+//    tiles.push(WFC_Tile {
+//        col: 1,
+//        row: 1,
+//        connection_types: [0,0,1,1],
+//        angle: 0,
+//    });
+//    // connecting pipe
+//    tiles.push(WFC_Tile {
+//        col: 2,
+//        row: 1,
+//        connection_types: [0,1,0,2],
+//        angle: 0,
+//    });
+//    tiles.push(WFC_Tile {
+//        col: 3,
+//        row: 0,
+//        connection_types: [0,0,2,2],
+//        angle: 0,
+//    });
+//    tiles.push(WFC_Tile {
+//        col: 3,
+//        row: 1,
+//        connection_types: [0,2,0,2],
+//        angle: 0,
+//    });
+
+    let tilemap = texture_creator.load_texture("./flat-city.png").unwrap();
 
     // WFC Stuff
     // ---------
@@ -479,19 +620,7 @@ pub fn main() {
     tiles.push(WFC_Tile {
         col: 0,
         row: 0,
-        connection_types: [1,1,0,1],
-        angle: 0,
-    });
-    tiles.push(WFC_Tile {
-        col: 2,
-        row: 0,
-        connection_types: [0,0,0,0],
-        angle: 0,
-    });
-    tiles.push(WFC_Tile {
-        col: 0,
-        row: 1,
-        connection_types: [0,1,0,1],
+        connection_types: [1,1,1,1],
         angle: 0,
     });
     tiles.push(WFC_Tile {
@@ -501,34 +630,61 @@ pub fn main() {
         angle: 0,
     });
     tiles.push(WFC_Tile {
-        col: 1,
-        row: 1,
-        connection_types: [0,0,1,1],
-        angle: 0,
-    });
-    // connecting pipe
-    tiles.push(WFC_Tile {
         col: 2,
-        row: 1,
-        connection_types: [0,1,0,2],
+        row: 0,
+        connection_types: [1,0,1,0],
         angle: 0,
     });
     tiles.push(WFC_Tile {
         col: 3,
         row: 0,
-        connection_types: [0,0,2,2],
+        connection_types: [1,1,0,0],
         angle: 0,
     });
     tiles.push(WFC_Tile {
-        col: 3,
-        row: 1,
-        connection_types: [0,2,0,2],
+        col: 4,
+        row: 0,
+        connection_types: [1,1,1,1],
         angle: 0,
     });
-    let ttiles = tiles.clone();
+    // walls
+    tiles.push(WFC_Tile {
+        col: 0,
+        row: 1,
+        connection_types: [1,2,1,2],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 1,
+        row: 1,
+        connection_types: [1,1,2,2],
+        angle: 0,
+    });
+    // fat blocks
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 1,
+        connection_types: [1,1,3,3],
+        angle: 0,
+    });
+//    tiles.push(WFC_Tile {
+//        col: 3,
+//        row: 1,
+//        connection_types: [1,1,3,3],
+//        angle: 0,
+//    });
+    tiles.push(WFC_Tile {
+        col: 4,
+        row: 1,
+        connection_types: [3,3,3,3],
+        angle: 0,
+    });
 
+    let ttiles = tiles.clone();
     let mut seed = STARTING_SEED;
-    let mut wfc = WFC::init(tiles);
+    let worldmap = Worldmap::new2d(MAP_WIDTH, MAP_HEIGHT);
+    println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
+    let mut wfc = WFC::init(worldmap, tiles);
     wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     if AUTO_TRY {
@@ -642,7 +798,7 @@ pub fn main() {
             // draw world map
             for x in 0..MAP_WIDTH {
                 for y in 0..MAP_HEIGHT {
-                    let stack = &wfc.worldmap[x][y];
+                    let stack = &wfc.worldmap[(x,y)];
                     if stack.len() == 1 {
                         draw_wfc_tile(&mut canvas, &tilemap, &(stack[0]), x as u32, y as u32);
                     } else {
