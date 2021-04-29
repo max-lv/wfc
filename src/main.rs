@@ -249,7 +249,7 @@ impl WFC {
         wfc
     }
 
-    fn meh_init_tile(tiles: &Vec<WFC_Tile>, square: &mut Vec<WFC_Tile>) {
+    fn init_tile(tiles: &Vec<WFC_Tile>, square: &mut Vec<WFC_Tile>) {
         square.clear();
         for tile in tiles {
             for i in 0..4 {
@@ -266,15 +266,10 @@ impl WFC {
         }
     }
 
-    fn init_tile(&mut self, square: &mut Vec<WFC_Tile>) {
-        WFC::meh_init_tile(&self.tiles, square);
-    }
-
     fn init_worldmap(&mut self) {
         // fill worldmap with stuff
         for i in 0..self.worldmap.len {
-            // FIXME: Rust sucks, try calling: `self.init_tile(&mut self.worldmap[i])` and feel the pain ...
-            WFC::meh_init_tile(&self.tiles, &mut self.worldmap[i]);
+            WFC::init_tile(&self.tiles, &mut self.worldmap[i]);
         }
     }
 
@@ -286,123 +281,6 @@ impl WFC {
             }
             println!("");
         }
-    }
-
-    fn find_undecided_squares(&self) -> Vec::<(usize, usize)> {
-        // find tiles with length of stack above 1
-        let mut available_squares = Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT);
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                if self.worldmap[(x,y)].len() == 1 {
-                    continue;
-                }
-                available_squares.push((x,y));
-            }
-        }
-        return available_squares;
-    }
-
-    /// like find_undecided_squares() but also excludes squares with maximum tile-stack size
-    fn find_touched_undecided_squares(&self) -> Vec::<(usize, usize)> {
-        let mut available_squares = Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT);
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                if self.worldmap[(x,y)].len() == 1 || self.worldmap[(x,y)].len() == 3 {
-                    continue;
-                }
-                available_squares.push((x,y));
-            }
-        }
-        return available_squares;
-    }
-
-    /// collects all undecided squares around already collapsed squares
-    fn find_adjacent_undecided_squares(&mut self) -> Vec::<(usize, usize)> {
-        let mut available_squares = HashSet::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT);
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                if self.worldmap[(x,y)].len() > 1 {
-                    continue;
-                }
-                for d in 0..4 {
-                    let (_x, _y) = match WFC::move_sq((x,y), d) {
-                        Some(sq) => sq,
-                        None => continue,
-                    };
-                    if self.worldmap[(_x,_y)].len() > 1 && self.worldmap[(_x,_y)].len() < 4 {
-                        available_squares.insert((_x,_y));
-                    }
-                }
-            }
-        }
-
-        if available_squares.len() == 0 {
-            let x = self.rng.gen_range(0..MAP_WIDTH);
-            let y = self.rng.gen_range(0..MAP_HEIGHT);
-            available_squares.insert((x,y));
-        }
-        let mut rv = available_squares.into_iter().collect::<Vec::<(usize, usize)>>();
-        rv.sort();
-        return rv;
-    }
-
-    fn find_lowest_undecided_squares(&self) -> Vec::<(usize, usize)> {
-        let tiles_variations = self.tiles.len()*4 + 1;
-        let mut available_squares = Vec::<Vec<(usize, usize)>>::with_capacity(tiles_variations);
-        for _ in 0..tiles_variations {
-            available_squares.push(Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT));
-        }
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                let len = self.worldmap[(x,y)].len();
-                if len == 1 {
-                    continue;
-                }
-                available_squares[len].push((x,y));
-            }
-        }
-
-        for x in &available_squares {
-            if x.len() > 0 {
-                return x.to_vec();
-            }
-        }
-        return available_squares[0].to_vec();
-    }
-
-    fn find_surrounded_undecided_squares(&self) -> Vec::<(usize, usize)> {
-        let mut available_squares = Vec::<Vec<(usize, usize)>>::with_capacity(5);
-        for _ in 0..5 {
-            available_squares.push(Vec::<(usize, usize)>::with_capacity(MAP_WIDTH*MAP_HEIGHT));
-        }
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                if self.worldmap[(x,y)].len() == 1 {
-                    continue;
-                }
-                // count decided tiles surrounding this square
-                let mut count = 0;
-                let square = (x,y);
-                for d in 0..4 {
-                    let (x,y) = match WFC::move_sq(square, d) {
-                        Some(sq) => sq,
-                        None => continue,
-                    };
-                    if self.worldmap[(x,y)].len() == 1 {
-                        count += 1;
-                    }
-                }
-                available_squares[count].push((x,y));
-            }
-        }
-
-        for i in (0..4).rev() {
-            if available_squares[i].len() > 0 {
-                return available_squares[i].to_vec();
-            }
-        }
-        // always empty:
-        return available_squares[0].to_vec();
     }
 
     fn find_squares_in_order(&self) -> Vec::<(usize, usize)> {
