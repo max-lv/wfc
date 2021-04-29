@@ -155,27 +155,53 @@ worldmap
 
 struct Worldmap {
     values: Vec<Vec<WFC_Tile>>,
-    size: Vec<usize>,
+    size: [usize; 3],
     len: usize,
 }
 
 impl Worldmap {
-    fn new2d(x: usize, y: usize) -> Worldmap {
-        Worldmap {
-            values: vec![vec![]; x*y],
-            size: vec![x, y],
-            len: x*y,
-        }
-    }
     fn new3d(x: usize, y: usize, z: usize) -> Worldmap {
         Worldmap {
             values: vec![vec![]; x*y*z],
-            size: vec![x, y, z],
+            size: [x, y, z],
             len: x*y*z,
         }
     }
+
     fn len(&self) -> usize {
         self.len
+    }
+
+    fn tmp_iter(&self) -> impl Iterator<Item = Position> {
+        let mut values = Vec::<Position>::with_capacity(self.len);
+        for x in 0..self.size[0] {
+        for y in 0..self.size[1] {
+        for z in 0..self.size[2] {
+            values.push([x,y,z]);
+        }
+        }
+        }
+        return values.into_iter();
+    }
+
+    fn move_(&self, square: Position, dir: &Direction) -> Option<Position> {
+        let (dx, dy, dz) = match dir {
+            Direction::NORTH => ( 0, -1,  0),
+            Direction::EAST  => (-1,  0,  0), // FIXME: ??? for some reason EAST and WEST switched around, 
+            Direction::SOUTH => ( 0,  1,  0), //        now it should go counter-clockwise
+            Direction::WEST  => ( 1,  0,  0),
+            Direction::UP    => ( 0,  0,  1),
+            Direction::DOWN  => ( 0,  0, -1),
+        };
+        let [XS,YS,ZS] = self.size;
+        let [x, y, z] = square;
+        let x = x as i32 + dx;
+        let y = y as i32 + dy;
+        let z = z as i32 + dz;
+        if x < 0 || x as usize >= XS { return None; }
+        if y < 0 || y as usize >= YS { return None; }
+        if z < 0 || z as usize >= ZS { return None; }
+        return Some([x as usize, y as usize, z as usize]);
     }
 }
 
@@ -212,7 +238,7 @@ impl std::ops::Index<(usize, usize, usize)> for Worldmap {
     type Output = Vec<WFC_Tile>;
     fn index<'a>(&'a self, idx: (usize, usize, usize)) -> &'a Vec<WFC_Tile> {
         let (x, y, z) = idx;
-        return &self.values[x + y*self.size[1] + z*self.size[2]]
+        return &self.values[x + y*self.size[0] + z*self.size[0]*self.size[1]]
     }
 }
 
@@ -223,18 +249,50 @@ impl std::ops::IndexMut<(usize, usize, usize)> for Worldmap {
     }
 }
 
+impl std::ops::Index<Position> for Worldmap {
+    type Output = Vec<WFC_Tile>;
+    fn index<'a>(&'a self, idx: Position) -> &'a Vec<WFC_Tile> {
+        let [x, y, z] = idx;
+        return &self.values[x + y*self.size[0] + z*self.size[0]*self.size[1]]
+    }
+}
 
-// IndexDirection
-// - can be generic for WFC_Tile & Worldmap
-// (usize,usize) vs (usize,usize,usize)
-// - triangle/hex directions for later
-// - have to take care of rotation
-//   - 4 for 2d, ??? for 3d
-// - move_sq (in the direction)
-// - directions ENUM
-//   - PX, NX, PY, NY, PZ, NZ
-// hmmm how to make it simple 3d (only Y-axis rotation)
+impl std::ops::IndexMut<Position> for Worldmap {
+    fn index_mut<'a>(&'a mut self, idx: Position) -> &'a mut Vec<WFC_Tile> {
+        let [x, y, z] = idx;
+        return &mut self.values[x + y*self.size[0] + z*self.size[0]*self.size[1]]
+    }
+}
 
+
+type Position = [usize; 3];
+enum Direction {NORTH, EAST, SOUTH, WEST, UP, DOWN}
+
+impl Direction {
+    fn flip(&self) -> Direction {
+        match self {
+            Direction::NORTH => Direction::SOUTH,
+            Direction::EAST  => Direction::WEST,
+            Direction::UP    => Direction::DOWN,
+            Direction::SOUTH => Direction::NORTH,
+            Direction::WEST  => Direction::EAST,
+            Direction::DOWN  => Direction::UP,
+        }
+    }
+}
+
+impl Into<usize> for Direction {
+    fn into(self) -> usize {
+        match self {
+            Direction::NORTH => 0,
+            Direction::EAST  => 1,
+            Direction::SOUTH => 2,
+            Direction::WEST  => 3,
+            Direction::UP    => 4,
+            Direction::DOWN  => 5,
+        }
+    }
+}
 
 impl WFC {
     // TODO: worldmap should hold indexes into tiles
@@ -273,58 +331,55 @@ impl WFC {
         }
     }
 
+    #[allow(non_snake_case)]
     fn print_worldmap(&self) {
         // debug print worldmap
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                print!("{:?} ", self.worldmap[(x,y)].len());
+        let [XS,YS,ZS] = self.worldmap.size;
+        for x in 0..XS {
+            for y in 0..YS {
+                for z in 0..ZS {
+                    print!("{:?} ", self.worldmap[(x,y,z)].len());
+                }
             }
             println!("");
         }
     }
 
-    fn find_squares_in_order(&self) -> Vec::<(usize, usize)> {
-        let mut available_squares = Vec::<(usize, usize)>::with_capacity(1);
-        for x in 0..MAP_WIDTH {
-            for y in 0..MAP_HEIGHT {
-                if self.worldmap[(x,y)].len() == 1 {
-                    continue;
-                }
-                available_squares.push((x,y));
-                return available_squares;
+    fn find_squares_in_order(&self) -> Vec::<Position> {
+        let mut available_squares = Vec::<Position>::with_capacity(1);
+        for square in self.worldmap.tmp_iter() {
+            if self.worldmap[square].len() == 1 {
+                continue;
             }
+            available_squares.push(square);
+            return available_squares;
         }
 
         // always empty:
         return available_squares;
     }
 
-    fn wfc_step(&mut self) -> Option<(usize, usize)> { // wfc3d: index has to be 2d/3d (or multidimensional)
-        //let available_squares = self.find_undecided_squares();
-        //let available_squares = self.find_adjacent_undecided_squares();
-        //let available_squares = self.find_lowest_undecided_squares();
-        //let available_squares = self.find_surrounded_undecided_squares();
-        //let available_squares = self.find_touched_undecided_squares();
+    fn wfc_step(&mut self) -> Option<Position> {
         let available_squares = self.find_squares_in_order();
 
         if available_squares.len() == 0 {
             println!("done");
             return None
         }
-        let map_square = *choose_random(&mut self.rng, &available_squares);
+        let square = *choose_random(&mut self.rng, &available_squares);
 
         // observe
-        let selected_tile = *choose_random(&mut self.rng, &self.worldmap[map_square]);
-        self.worldmap[map_square].clear(); // @question: is this does free() ?
-        self.worldmap[map_square].push(selected_tile);
-        return Some(map_square);
+        let selected_tile = *choose_random(&mut self.rng, &self.worldmap[square]);
+        //println!("selected_tile: {:?}  square: {:?}  stack: {:?}", selected_tile, square, self.worldmap[square].len());
+        self.worldmap[square].clear();
+        self.worldmap[square].push(selected_tile);
+        return Some(square);
     }
 
-    // wfc3d: map_square has to be 2d/3d and directions
     /// returns true if we changed available connections, false otherwise
-    fn update_tile_stack(&mut self, connections: &HashSet<usize>, map_square: (usize, usize), dir: usize) -> bool {
+    fn update_tile_stack(&mut self, connections: &HashSet<usize>, square: Position, dir: Direction) -> bool {
         // we are trying to access tile beyond edge
-        let (x, y) = match WFC::move_sq(map_square, dir) {
+        let square = match self.worldmap.move_(square, &dir) {
             Some(x) => x,
             None => return false,
         };
@@ -333,60 +388,42 @@ impl WFC {
         // FIXME: 3 is hardcoded, but should be calculated.
         //        probably should put it into WFC struct.
         //        can be calculated from original tiles.
+        // TODO: self.worldmap.max_connections(dir) -> usize
         if connections.len() == 4 {
             return false;
         }
 
         let mut ok_stack = Vec::<WFC_Tile>::with_capacity(5);
 
-        let stack = &self.worldmap[(x,y)];
+        let stack = &self.worldmap[square];
         for tile in stack {
-            // connection_types: [N, E, S, W]
-            //                    0  1  2  3
-            if !connections.contains(&tile.connection_types[(dir+2) % 4]) {
+            let d: usize = dir.flip().into();
+            if !connections.contains(&tile.connection_types[d]) {
                 continue
             }
             ok_stack.push(*tile);
         }
-        if self.worldmap[(x,y)].len() == ok_stack.len() {
+        if self.worldmap[square].len() == ok_stack.len() {
             return false;
         }
         if ok_stack.len() == 0 {
-            println!("error: tile-stack reduced to 0!!!  tile: {:?}", map_square);
-            self.worldmap[(x,y)].clear();
+            println!("error: tile-stack reduced to 0!!!  tile: {:?}", square);
+            self.worldmap[square].clear();
             self.debug_break = true;
             return true;
         }
-        self.worldmap[(x,y)] = ok_stack;
+        self.worldmap[square] = ok_stack;
 //        println!("update_tile_stack has changed connections {:?}", map_square);
         return true;
     }
 
-    // wfc3d: this should be moved to Index/Direction type
-    fn move_sq(map_square: (usize, usize), dir: usize) -> Option<(usize, usize)> {
-        let (dx, dy) = match dir {
-            0 => ( 0, -1), // NORTH
-            1 => (-1,  0), // EAST ??? for some reason EAST and WEST switched around, now it should go counter-clockwise
-            2 => ( 0,  1), // SOUTH
-            3 => ( 1,  0), // WEST
-            _ => panic!("Unknown dir {}", dir),
-        };
-        let (x, y) = map_square;
-        let x = x as i32 + dx;
-        let y = y as i32 + dy;
-        if x < 0 || x as usize >= MAP_WIDTH { return None; }
-        if y < 0 || y as usize >= MAP_HEIGHT { return None; }
-        return Some((x as usize, y as usize));
-    }
-
     // finds all available connections from this tile for each direction
-    fn gather_available_connections(&self, square: (usize, usize)) -> Vec::<std::collections::HashSet<usize>> {
-        let (x,y) = square;
+    fn gather_available_connections(&self, square: Position) -> Vec::<std::collections::HashSet<usize>> {
         let mut connections = Vec::<std::collections::HashSet<usize>>::with_capacity(4);
         for _ in 0..4 {
             connections.push(std::collections::HashSet::<usize>::new());
         }
-        let stack = &self.worldmap[(x,y)];
+        let stack = &self.worldmap[square];
         for tile in stack {
             for i in 0..4 {
                 connections[i].insert(tile.connection_types[i]);
@@ -396,24 +433,24 @@ impl WFC {
     }
 
     // wfc3d: map_square probably can be anything
-    fn propagate(&mut self, map_square: (usize, usize)) {
+    fn propagate(&mut self, square: Position) {
         if self.debug_break {
             return;
         }
 
-        let connections = self.gather_available_connections(map_square);
+        let connections = self.gather_available_connections(square);
 
         // clear direction
-        let is_recurse0 = self.update_tile_stack(&connections[0], map_square, 0);
-        let is_recurse1 = self.update_tile_stack(&connections[1], map_square, 1);
-        let is_recurse2 = self.update_tile_stack(&connections[2], map_square, 2);
-        let is_recurse3 = self.update_tile_stack(&connections[3], map_square, 3);
+        let is_recurse0 = self.update_tile_stack(&connections[0], square, Direction::NORTH);
+        let is_recurse1 = self.update_tile_stack(&connections[1], square, Direction::EAST);
+        let is_recurse2 = self.update_tile_stack(&connections[2], square, Direction::SOUTH);
+        let is_recurse3 = self.update_tile_stack(&connections[3], square, Direction::WEST);
 
         // recurse in that direction
-        if is_recurse0 { self.propagate(WFC::move_sq(map_square, 0).unwrap()); }
-        if is_recurse1 { self.propagate(WFC::move_sq(map_square, 1).unwrap()); }
-        if is_recurse2 { self.propagate(WFC::move_sq(map_square, 2).unwrap()); }
-        if is_recurse3 { self.propagate(WFC::move_sq(map_square, 3).unwrap()); }
+        if is_recurse0 { self.propagate(self.worldmap.move_(square, &Direction::NORTH).unwrap()); }
+        if is_recurse1 { self.propagate(self.worldmap.move_(square, &Direction::EAST).unwrap()); }
+        if is_recurse2 { self.propagate(self.worldmap.move_(square, &Direction::SOUTH).unwrap()); }
+        if is_recurse3 { self.propagate(self.worldmap.move_(square, &Direction::WEST).unwrap()); }
     }
 }
 
@@ -570,7 +607,7 @@ pub fn main() {
 
     let ttiles = tiles.clone();
     let mut seed = STARTING_SEED;
-    let worldmap = Worldmap::new2d(MAP_WIDTH, MAP_HEIGHT);
+    let worldmap = Worldmap::new3d(MAP_WIDTH, MAP_HEIGHT, 1);
     println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
     let mut wfc = WFC::init(worldmap, tiles);
     wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
