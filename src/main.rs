@@ -223,6 +223,19 @@ impl std::ops::IndexMut<(usize, usize, usize)> for Worldmap {
     }
 }
 
+
+// IndexDirection
+// - can be generic for WFC_Tile & Worldmap
+// (usize,usize) vs (usize,usize,usize)
+// - triangle/hex directions for later
+// - have to take care of rotation
+//   - 4 for 2d, ??? for 3d
+// - move_sq (in the direction)
+// - directions ENUM
+//   - PX, NX, PY, NY, PZ, NZ
+// hmmm how to make it simple 3d (only Y-axis rotation)
+
+
 impl WFC {
     // TODO: worldmap should hold indexes into tiles
     fn init(worldmap: Worldmap, tiles: Vec<WFC_Tile>) -> WFC {
@@ -236,7 +249,6 @@ impl WFC {
         wfc
     }
 
-    // FIXME: Rust sucks, try calling: `self.init_tile(&mut self.worldmap[i])` and feel the pain ...
     fn meh_init_tile(tiles: &Vec<WFC_Tile>, square: &mut Vec<WFC_Tile>) {
         square.clear();
         for tile in tiles {
@@ -261,6 +273,7 @@ impl WFC {
     fn init_worldmap(&mut self) {
         // fill worldmap with stuff
         for i in 0..self.worldmap.len {
+            // FIXME: Rust sucks, try calling: `self.init_tile(&mut self.worldmap[i])` and feel the pain ...
             WFC::meh_init_tile(&self.tiles, &mut self.worldmap[i]);
         }
     }
@@ -408,7 +421,7 @@ impl WFC {
         return available_squares;
     }
 
-    fn wfc_step(&mut self) -> Option<(usize, usize)> {
+    fn wfc_step(&mut self) -> Option<(usize, usize)> { // wfc3d: index has to be 2d/3d (or multidimensional)
         //let available_squares = self.find_undecided_squares();
         //let available_squares = self.find_adjacent_undecided_squares();
         //let available_squares = self.find_lowest_undecided_squares();
@@ -422,19 +435,14 @@ impl WFC {
         }
         let map_square = *choose_random(&mut self.rng, &available_squares);
 
-//        println!("Selected map square: {:?}", map_square);
-
         // observe
-        let (x,y) = map_square;
-        let selected_tile = *choose_random(&mut self.rng, &self.worldmap[(x,y)]);
-        self.worldmap[(x,y)].clear(); // @question: is this does free() ?
-        self.worldmap[(x,y)].push(selected_tile);
-//        println!("Selected tile: {:?}", selected_tile);
+        let selected_tile = *choose_random(&mut self.rng, &self.worldmap[map_square]);
+        self.worldmap[map_square].clear(); // @question: is this does free() ?
+        self.worldmap[map_square].push(selected_tile);
         return Some(map_square);
-
-        // TODO: propagate
     }
 
+    // wfc3d: map_square has to be 2d/3d and directions
     /// returns true if we changed available connections, false otherwise
     fn update_tile_stack(&mut self, connections: &HashSet<usize>, map_square: (usize, usize), dir: usize) -> bool {
         // we are trying to access tile beyond edge
@@ -476,6 +484,7 @@ impl WFC {
         return true;
     }
 
+    // wfc3d: this should be moved to Index/Direction type
     fn move_sq(map_square: (usize, usize), dir: usize) -> Option<(usize, usize)> {
         let (dx, dy) = match dir {
             0 => ( 0, -1), // NORTH
@@ -508,6 +517,7 @@ impl WFC {
         return connections;
     }
 
+    // wfc3d: map_square probably can be anything
     fn propagate(&mut self, map_square: (usize, usize)) {
         if self.debug_break {
             return;
