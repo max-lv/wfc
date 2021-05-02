@@ -8,22 +8,24 @@ use sdl2::rect::{Rect, Point};
 use sdl2::video::Window;
 use sdl2::gfx::primitives::DrawRenderer;
 use std::time::Duration;
-use std::collections::{HashMap, HashSet};
-use std::ops::IndexMut;
+use std::collections::{HashSet};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use rand::Rng;
 use rand::SeedableRng;
+use signal_hook::flag;
 
 const SHOW_CONNECTIONS: bool = false;
 const SHOW_TILESET: bool = false;
-const AUTO_TRY: bool = false;
-const STOP_ON_SUCCESS: bool = false;
+const AUTO_TRY: bool = true;
+const STOP_ON_SUCCESS: bool = true;
 const STARTING_SEED: u64 = 144;
 
-const TILESIZE: u32 = 8;
+const TILESIZE: u32 = 10;
 const SCALE: u32 = 5;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
-const MAP_WIDTH: usize = (800/TILESIZE/SCALE) as usize;
-const MAP_HEIGHT: usize = (600/TILESIZE/SCALE) as usize;
+const MAP_WIDTH: usize = 10;//(800/TILESIZE/SCALE) as usize;
+const MAP_HEIGHT: usize = 10;//(600/TILESIZE/SCALE) as usize;
 
 const CON_TYPE_COLORS: [Color;3] = [
     Color::RED,
@@ -55,12 +57,20 @@ fn draw_outline_circle(canvas: &mut Canvas<Window>, x: u32, y: u32, r: i16, colo
 struct WFC_Tile {
     col: u32,
     row: u32,
-    connection_types: [usize; 4],
+    connection_types: [usize; 6],
     angle: u32,
 }
 
-fn rotate_array(arr: [usize; 4], rot: usize) -> [usize; 4] {
-    [arr[rot % 4], arr[(rot+1) % 4], arr[(rot+2) % 4], arr[(rot+3) % 4]]
+fn rotate_array(arr: [usize; 6], rot: usize) -> [usize; 6] {
+    let mut up_dir = arr[4];
+    if arr[4] != 0 {
+        up_dir = arr[4] + (rot+1)*1000;
+    }
+    let mut down_dir = arr[5];
+    if arr[5] != 0 {
+        down_dir = arr[5] + (rot+1)*1000;
+    }
+    return [arr[rot % 4], arr[(rot+1) % 4], arr[(rot+2) % 4], arr[(rot+3) % 4], up_dir, down_dir];
 }
 
 fn draw_wfc_tile(canvas: &mut Canvas<Window>, tilemap: &Texture, wfc_tile: &WFC_Tile, x: u32, y: u32) {
@@ -333,12 +343,18 @@ impl WFC {
 
     #[allow(non_snake_case)]
     fn print_worldmap(&self) {
+        if self.debug_break {
+            println!("Debug locked!");
+            return;
+        }
         // debug print worldmap
         let [XS,YS,ZS] = self.worldmap.size;
         for x in 0..XS {
             for y in 0..YS {
                 for z in 0..ZS {
-                    print!("{:?} ", self.worldmap[(x,y,z)].len());
+                    let tile = self.worldmap[(x,y,z)][0];
+                    if tile.col == 0 { continue; }
+                    print!("({}, {}, {}, {}, {}), ", x, y, z, tile.angle, tile.col);
                 }
             }
             println!("");
@@ -370,6 +386,7 @@ impl WFC {
 
         // observe
         let selected_tile = *choose_random(&mut self.rng, &self.worldmap[square]);
+
         //println!("selected_tile: {:?}  square: {:?}  stack: {:?}", selected_tile, square, self.worldmap[square].len());
         self.worldmap[square].clear();
         self.worldmap[square].push(selected_tile);
@@ -419,13 +436,13 @@ impl WFC {
 
     // finds all available connections from this tile for each direction
     fn gather_available_connections(&self, square: Position) -> Vec::<std::collections::HashSet<usize>> {
-        let mut connections = Vec::<std::collections::HashSet<usize>>::with_capacity(4);
-        for _ in 0..4 {
+        let mut connections = Vec::<std::collections::HashSet<usize>>::with_capacity(6);
+        for _ in 0..6 {
             connections.push(std::collections::HashSet::<usize>::new());
         }
         let stack = &self.worldmap[square];
         for tile in stack {
-            for i in 0..4 {
+            for i in 0..6 {
                 connections[i].insert(tile.connection_types[i]);
             }
         }
@@ -445,18 +462,206 @@ impl WFC {
         let is_recurse1 = self.update_tile_stack(&connections[1], square, Direction::EAST);
         let is_recurse2 = self.update_tile_stack(&connections[2], square, Direction::SOUTH);
         let is_recurse3 = self.update_tile_stack(&connections[3], square, Direction::WEST);
+        let is_recurse4 = self.update_tile_stack(&connections[4], square, Direction::UP);
+        let is_recurse5 = self.update_tile_stack(&connections[5], square, Direction::DOWN);
 
         // recurse in that direction
         if is_recurse0 { self.propagate(self.worldmap.move_(square, &Direction::NORTH).unwrap()); }
         if is_recurse1 { self.propagate(self.worldmap.move_(square, &Direction::EAST).unwrap()); }
         if is_recurse2 { self.propagate(self.worldmap.move_(square, &Direction::SOUTH).unwrap()); }
         if is_recurse3 { self.propagate(self.worldmap.move_(square, &Direction::WEST).unwrap()); }
+        if is_recurse4 { self.propagate(self.worldmap.move_(square, &Direction::UP).unwrap()); }
+        if is_recurse5 { self.propagate(self.worldmap.move_(square, &Direction::DOWN).unwrap()); }
     }
 }
 
 fn choose_random<'a, Any>(rng: &mut rand::rngs::StdRng, vec: &'a Vec<Any>) -> &'a Any {
     &vec[rng.gen_range(0..vec.len())]
 }
+
+
+fn pipes() -> (String, Vec<WFC_Tile>) {
+    let tilemap = String::from("./pipes_tileset.png");
+
+    let mut tiles = Vec::new();
+    tiles.push(WFC_Tile {
+        col: 0,
+        row: 0,
+        connection_types: [1,1,0,1,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 0,
+        connection_types: [0,0,0,0,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 0,
+        row: 1,
+        connection_types: [0,1,0,1,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 1,
+        row: 0,
+        connection_types: [1,1,1,1,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 1,
+        row: 1,
+        connection_types: [0,0,1,1,0,0],
+        angle: 0,
+    });
+    // connecting pipe
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 1,
+        connection_types: [0,1,0,2,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 3,
+        row: 0,
+        connection_types: [0,0,2,2,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 3,
+        row: 1,
+        connection_types: [0,2,0,2,0,0],
+        angle: 0,
+    });
+    return (tilemap, tiles);
+}
+
+fn flat_city() -> (String, Vec<WFC_Tile>) {
+    let tilemap = String::from("./flat-city.png");
+
+    let mut tiles = Vec::new();
+    tiles.push(WFC_Tile {
+        col: 0,
+        row: 0,
+        connection_types: [1,1,1,1,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 1,
+        row: 0,
+        connection_types: [1,1,1,1,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 0,
+        connection_types: [1,0,1,0,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 3,
+        row: 0,
+        connection_types: [1,1,0,0,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 4,
+        row: 0,
+        connection_types: [1,1,1,1,0,0],
+        angle: 0,
+    });
+    // walls
+    tiles.push(WFC_Tile {
+        col: 0,
+        row: 1,
+        connection_types: [1,2,1,2,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 1,
+        row: 1,
+        connection_types: [1,1,2,2,0,0],
+        angle: 0,
+    });
+    // fat blocks
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 1,
+        connection_types: [1,1,3,3,0,0],
+        angle: 0,
+    });
+//    tiles.push(WFC_Tile {
+//        col: 3,
+//        row: 1,
+//        connection_types: [1,1,3,3,0,0],
+//        angle: 0,
+//    });
+    tiles.push(WFC_Tile {
+        col: 4,
+        row: 1,
+        connection_types: [3,3,3,3,0,0],
+        angle: 0,
+    });
+
+    return (tilemap, tiles);
+}
+
+fn stairs_3d() -> (String, Vec<WFC_Tile>) {
+    let tilemap = String::from("");
+
+    let mut tiles = Vec::new();
+    // empty
+    tiles.push(WFC_Tile {
+        col: 0,
+        row: 0,
+        connection_types: [0,0,0,0,0,0],
+        angle: 0,
+    });
+    // stairs empty
+    tiles.push(WFC_Tile {
+        col: 5,
+        row: 0,
+        connection_types: [0,0,1,0,0,2],
+        angle: 0,
+    });
+    // stairs
+    tiles.push(WFC_Tile {
+        col: 1,
+        row: 0,
+        connection_types: [1,0,0,0,2,0],
+        angle: 0,
+    });
+    // line
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 0,
+        connection_types: [1,0,1,0,0,0],
+        angle: 0,
+    });
+    // T-junction
+    tiles.push(WFC_Tile {
+        col: 3,
+        row: 0,
+        connection_types: [1,1,1,0,0,0],
+        angle: 0,
+    });
+    // deadend
+    tiles.push(WFC_Tile {
+        col: 4,
+        row: 0,
+        connection_types: [1,0,0,0,0,0],
+        angle: 0,
+    });
+//    // debug
+//    tiles.push(WFC_Tile {
+//        col: 5,
+//        row: 0,
+//        connection_types: [0,0,0,0,3,2],
+//        angle: 0,
+//    });
+    return (tilemap, tiles);
+}
+
 
 pub fn main() {
     better_panic::install();
@@ -476,144 +681,33 @@ pub fn main() {
     canvas.clear();
     canvas.present();
     let mut event_pump = sdl_context.event_pump().unwrap();
-    let texture_creator = canvas.texture_creator();
+    let texture_creator: TextureCreator<sdl2::video::WindowContext> = canvas.texture_creator();
 
     // load font
     let font = ttf_context.load_font("/home/terra/.local/share/fonts/Ubuntu-B.ttf", 128).unwrap();
-//    let tilemap = texture_creator.load_texture("./pipes_tileset.png").unwrap();
-//
-//    // WFC Stuff
-//    // ---------
-//    // INIT worldmap
-//    let mut tiles = Vec::new();
-//    tiles.push(WFC_Tile {
-//        col: 0,
-//        row: 0,
-//        connection_types: [1,1,0,1],
-//        angle: 0,
-//    });
-//    tiles.push(WFC_Tile {
-//        col: 2,
-//        row: 0,
-//        connection_types: [0,0,0,0],
-//        angle: 0,
-//    });
-//    tiles.push(WFC_Tile {
-//        col: 0,
-//        row: 1,
-//        connection_types: [0,1,0,1],
-//        angle: 0,
-//    });
-//    tiles.push(WFC_Tile {
-//        col: 1,
-//        row: 0,
-//        connection_types: [1,1,1,1],
-//        angle: 0,
-//    });
-//    tiles.push(WFC_Tile {
-//        col: 1,
-//        row: 1,
-//        connection_types: [0,0,1,1],
-//        angle: 0,
-//    });
-//    // connecting pipe
-//    tiles.push(WFC_Tile {
-//        col: 2,
-//        row: 1,
-//        connection_types: [0,1,0,2],
-//        angle: 0,
-//    });
-//    tiles.push(WFC_Tile {
-//        col: 3,
-//        row: 0,
-//        connection_types: [0,0,2,2],
-//        angle: 0,
-//    });
-//    tiles.push(WFC_Tile {
-//        col: 3,
-//        row: 1,
-//        connection_types: [0,2,0,2],
-//        angle: 0,
-//    });
 
-    let tilemap = texture_creator.load_texture("./flat-city.png").unwrap();
-
-    // WFC Stuff
-    // ---------
-    // INIT worldmap
-    let mut tiles = Vec::new();
-    tiles.push(WFC_Tile {
-        col: 0,
-        row: 0,
-        connection_types: [1,1,1,1],
-        angle: 0,
-    });
-    tiles.push(WFC_Tile {
-        col: 1,
-        row: 0,
-        connection_types: [1,1,1,1],
-        angle: 0,
-    });
-    tiles.push(WFC_Tile {
-        col: 2,
-        row: 0,
-        connection_types: [1,0,1,0],
-        angle: 0,
-    });
-    tiles.push(WFC_Tile {
-        col: 3,
-        row: 0,
-        connection_types: [1,1,0,0],
-        angle: 0,
-    });
-    tiles.push(WFC_Tile {
-        col: 4,
-        row: 0,
-        connection_types: [1,1,1,1],
-        angle: 0,
-    });
-    // walls
-    tiles.push(WFC_Tile {
-        col: 0,
-        row: 1,
-        connection_types: [1,2,1,2],
-        angle: 0,
-    });
-    tiles.push(WFC_Tile {
-        col: 1,
-        row: 1,
-        connection_types: [1,1,2,2],
-        angle: 0,
-    });
-    // fat blocks
-    tiles.push(WFC_Tile {
-        col: 2,
-        row: 1,
-        connection_types: [1,1,3,3],
-        angle: 0,
-    });
-//    tiles.push(WFC_Tile {
-//        col: 3,
-//        row: 1,
-//        connection_types: [1,1,3,3],
-//        angle: 0,
-//    });
-    tiles.push(WFC_Tile {
-        col: 4,
-        row: 1,
-        connection_types: [3,3,3,3],
-        angle: 0,
-    });
-
+    //let (tilemap_path, tiles) = pipes();
+    //let (tilemap_path, tiles) = flat_city();
+    let (tilemap_path, tiles) = stairs_3d();
+    //let tilemap = texture_creator.load_texture(tilemap_path).unwrap();
     let ttiles = tiles.clone();
     let mut seed = STARTING_SEED;
-    let worldmap = Worldmap::new3d(MAP_WIDTH, MAP_HEIGHT, 1);
+    let worldmap = Worldmap::new3d(MAP_WIDTH, MAP_HEIGHT, 7);
     println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
     let mut wfc = WFC::init(worldmap, tiles);
     wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     if AUTO_TRY {
+        let interupt_flag = Arc::new(AtomicBool::new(false));
+        flag::register(signal_hook::consts::SIGINT, Arc::clone(&interupt_flag));
+
         for try_num in 0..10_000 {
+            if interupt_flag.load(Ordering::Relaxed) {
+                println!("\nReceived interrupt; Quiting...");
+                return;
+            }
+
+            ::std::thread::sleep(Duration::from_millis(1));
             println!("Try #{} (seed: {})", try_num, seed);
             loop {
                 if wfc.debug_break {
@@ -627,6 +721,13 @@ pub fn main() {
                 wfc.propagate(tile);
             }
 
+            for tile in &wfc.worldmap.values {
+                if tile[0].col == 1 {
+                    wfc.print_worldmap();
+                    break
+                }
+            }
+
             if wfc.debug_break == STOP_ON_SUCCESS {
                 wfc.debug_break = false;
                 wfc.init_worldmap();
@@ -637,6 +738,9 @@ pub fn main() {
             }
         }
     }
+
+    return;
+    let tilemap = texture_creator.load_texture(tilemap_path).unwrap();
 
 // instead of going to each tile and changing their possible tiles list
 // we can:

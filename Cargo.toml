@@ -13,4 +13,5 @@ features = ["image", "gfx", "ttf"]
 [dependencies]
 rand = "0.8.3"
 better-panic = "*"
+signal-hook = "*"
 
