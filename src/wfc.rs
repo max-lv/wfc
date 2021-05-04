@@ -27,6 +27,12 @@ pub struct WFC_Tile {
     pub angle: u32,
 }
 
+impl PartialEq for WFC_Tile {
+    fn eq(&self, other:&Self) -> bool {
+        self.col == other.col && self.row == other.row && self.connection_types == other.connection_types && self.angle == other.angle
+    }
+}
+
 fn rotate_array(arr: [usize; 6], rot: usize) -> [usize; 6] {
     let mut up_dir = arr[4];
     if arr[4] != 0 {
@@ -45,13 +51,7 @@ fn choose_random<'a, Any>(rng: &mut rand::rngs::StdRng, vec: &'a Vec<Any>) -> &'
 }
 
 
-pub struct WFC {
-    pub rng: rand::rngs::StdRng,
-    pub tiles: Vec<WFC_Tile>,
-    pub worldmap: Worldmap,
-    pub debug_break: bool,
-}
-
+#[derive(Clone)]
 pub struct Worldmap {
     pub values: Vec<Vec<WFC_Tile>>,
     pub size: [usize; 3],
@@ -193,17 +193,29 @@ impl Into<usize> for Direction {
     }
 }
 
+pub struct WFC {
+    pub tiles: Vec<WFC_Tile>,
+    pub worldmap: Worldmap,
+    pub seed: u64,
+    rng: rand::rngs::StdRng,
+}
+
 impl WFC {
     // TODO: worldmap should hold indexes into tiles
-    pub fn init(worldmap: Worldmap, tiles: Vec<WFC_Tile>) -> WFC {
+    pub fn init(worldmap: Worldmap, tiles: Vec<WFC_Tile>, seed: u64) -> WFC {
         let mut wfc = WFC {
             tiles,
             worldmap,
-            rng: rand::rngs::StdRng::seed_from_u64(1),
-            debug_break: false,
+            rng: rand::rngs::StdRng::seed_from_u64(seed),
+            seed,
         };
         wfc.init_worldmap();
         wfc
+    }
+
+    pub fn init_rng(&mut self, seed: u64) {
+        self.seed = seed;
+        self.rng = rand::rngs::StdRng::seed_from_u64(seed);
     }
 
     fn init_tile(tiles: &Vec<WFC_Tile>, square: &mut Vec<WFC_Tile>) {
@@ -232,10 +244,6 @@ impl WFC {
 
     #[allow(non_snake_case)]
     pub fn print_worldmap(&self) {
-        if self.debug_break {
-            println!("Debug locked!");
-            return;
-        }
         // debug print worldmap
         let [XS,YS,ZS] = self.worldmap.size;
         for x in 0..XS {
@@ -264,11 +272,32 @@ impl WFC {
         return available_squares;
     }
 
-    pub fn wfc_step(&mut self) -> Option<Position> {
+    pub fn add_tile(&mut self, square: Position, tile: WFC_Tile) -> Result<(), String> {
+        if !self.worldmap[square].contains(&tile) {
+            return Err(String::from("no such tile in stack"));
+        }
+
+        self.worldmap[square].clear();
+        self.worldmap[square].push(tile);
+
+        self.propagate(square);
+
+        return Ok(());
+    }
+
+    pub fn wfc_step(&mut self) -> Result<bool, String> {
+        let tile = match self.collapse() {
+            Some(x) => x,
+            None => return Ok(true),
+        };
+        self.propagate(tile)?;
+        return Ok(false);
+    }
+
+    pub fn collapse(&mut self) -> Option<Position> {
         let available_squares = self.find_squares_in_order();
 
         if available_squares.len() == 0 {
-            println!("done");
             return None
         }
         let square = *choose_random(&mut self.rng, &available_squares);
@@ -283,11 +312,11 @@ impl WFC {
     }
 
     /// returns true if we changed available connections, false otherwise
-    fn update_tile_stack(&mut self, connections: &HashSet<usize>, square: Position, dir: Direction) -> bool {
+    fn update_tile_stack(&mut self, connections: &HashSet<usize>, square: Position, dir: Direction) -> Result<bool, String> {
         // we are trying to access tile beyond edge
         let square = match self.worldmap.move_(square, &dir) {
             Some(x) => x,
-            None => return false,
+            None => return Ok(false),
         };
 
         // this direction has all connections available
@@ -296,7 +325,7 @@ impl WFC {
         //        can be calculated from original tiles.
         // TODO: self.worldmap.max_connections(dir) -> usize
         if connections.len() == 4 {
-            return false;
+            return Ok(false);
         }
 
         let mut ok_stack = Vec::<WFC_Tile>::with_capacity(5);
@@ -310,17 +339,14 @@ impl WFC {
             ok_stack.push(*tile);
         }
         if self.worldmap[square].len() == ok_stack.len() {
-            return false;
+            return Ok(false);
         }
         if ok_stack.len() == 0 {
-            println!("error: tile-stack reduced to 0!!!  tile: {:?}", square);
-            self.worldmap[square].clear();
-            self.debug_break = true;
-            return true;
+            return Err(format!("error: tile-stack reduced to 0!!!  tile: {:?}", square));
         }
         self.worldmap[square] = ok_stack;
 //        println!("update_tile_stack has changed connections {:?}", map_square);
-        return true;
+        return Ok(true);
     }
 
     // finds all available connections from this tile for each direction
@@ -339,20 +365,16 @@ impl WFC {
     }
 
     // wfc3d: map_square probably can be anything
-    pub fn propagate(&mut self, square: Position) {
-        if self.debug_break {
-            return;
-        }
-
+    pub fn propagate(&mut self, square: Position) -> Result<(), String> {
         let connections = self.gather_available_connections(square);
 
         // clear direction
-        let is_recurse0 = self.update_tile_stack(&connections[0], square, Direction::NORTH);
-        let is_recurse1 = self.update_tile_stack(&connections[1], square, Direction::EAST);
-        let is_recurse2 = self.update_tile_stack(&connections[2], square, Direction::SOUTH);
-        let is_recurse3 = self.update_tile_stack(&connections[3], square, Direction::WEST);
-        let is_recurse4 = self.update_tile_stack(&connections[4], square, Direction::UP);
-        let is_recurse5 = self.update_tile_stack(&connections[5], square, Direction::DOWN);
+        let is_recurse0 = self.update_tile_stack(&connections[0], square, Direction::NORTH)?;
+        let is_recurse1 = self.update_tile_stack(&connections[1], square, Direction::EAST)?;
+        let is_recurse2 = self.update_tile_stack(&connections[2], square, Direction::SOUTH)?;
+        let is_recurse3 = self.update_tile_stack(&connections[3], square, Direction::WEST)?;
+        let is_recurse4 = self.update_tile_stack(&connections[4], square, Direction::UP)?;
+        let is_recurse5 = self.update_tile_stack(&connections[5], square, Direction::DOWN)?;
 
         // recurse in that direction
         if is_recurse0 { self.propagate(self.worldmap.move_(square, &Direction::NORTH).unwrap()); }
@@ -361,5 +383,31 @@ impl WFC {
         if is_recurse3 { self.propagate(self.worldmap.move_(square, &Direction::WEST).unwrap()); }
         if is_recurse4 { self.propagate(self.worldmap.move_(square, &Direction::UP).unwrap()); }
         if is_recurse5 { self.propagate(self.worldmap.move_(square, &Direction::DOWN).unwrap()); }
+
+        return Ok(());
+    }
+
+    // wfcstate: init, running, error, done
+    // wfcstep should do propagation
+    pub fn run(&mut self) -> Result<&Worldmap, String> {
+        loop {
+            let is_done = self.wfc_step()?;
+            if is_done {
+                return Ok(&self.worldmap);
+            }
+        }
+    }
+
+    pub fn run_until_success(&mut self) -> &Worldmap {
+        // this is important, because worldmap might have been initialised by add_tile()
+        let worldmap = self.worldmap.clone();
+        loop {
+            match self.run() {
+                Ok(_) => return &self.worldmap,
+                _ => (),
+            };
+            self.init_rng(self.seed + 1);
+            self.worldmap = worldmap.clone();
+        }
     }
 }

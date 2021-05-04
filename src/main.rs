@@ -10,8 +10,6 @@ use sdl2::gfx::primitives::DrawRenderer;
 use std::time::Duration;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use rand::Rng;
-use rand::SeedableRng;
 use signal_hook::flag;
 
 mod wfc;
@@ -21,15 +19,15 @@ use tilesets::*;
 
 const SHOW_CONNECTIONS: bool = false;
 const SHOW_TILESET: bool = false;
-const AUTO_TRY: bool = true;
+const AUTO_TRY: bool = false;
 const STOP_ON_SUCCESS: bool = true;
 const STARTING_SEED: u64 = 144;
 
-const TILESIZE: u32 = 10;
+const TILESIZE: u32 = 8;
 const SCALE: u32 = 5;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
-const MAP_WIDTH: usize = 10;//(800/TILESIZE/SCALE) as usize;
-const MAP_HEIGHT: usize = 10;//(600/TILESIZE/SCALE) as usize;
+const MAP_SIZE: (usize, usize, usize) = ((800/TILESIZE/SCALE) as usize, (600/TILESIZE/SCALE) as usize, 1);
+//const MAP_SIZE: (usize, usize, usize) = (10, 10, 7);
 
 const CON_TYPE_COLORS: [Color;3] = [
     Color::RED,
@@ -63,7 +61,6 @@ fn draw_wfc_tile(canvas: &mut Canvas<Window>, tilemap: &Texture, wfc_tile: &WFC_
         return;
     }
 
-    //let con_types = rotate_array(wfc_tile.connection_types, (wfc_tile.angle/90) as usize);
     let con_types = wfc_tile.connection_types;
     let x = x*TILESIZE_SCALED;
     let y = y*TILESIZE_SCALED;
@@ -145,84 +142,50 @@ pub fn main() {
 
     //let (tilemap_path, tiles) = pipes();
     //let (tilemap_path, tiles) = flat_city();
-    let (tilemap_path, tiles) = stairs_3d();
-    //let tilemap = texture_creator.load_texture(tilemap_path).unwrap();
+    let (tilemap_path, tiles) = flat_city_paths_only();
+    //let (tilemap_path, tiles) = stairs_3d();
     let ttiles = tiles.clone();
     let mut seed = STARTING_SEED;
-    let worldmap = Worldmap::new3d(MAP_WIDTH, MAP_HEIGHT, 7);
+    let (x_size, y_size, z_size) = MAP_SIZE;
+    let worldmap = Worldmap::new3d(x_size, y_size, z_size);
     println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
-    let mut wfc = WFC::init(worldmap, tiles);
-    wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut wfc = WFC::init(worldmap, tiles, seed);
+
+    wfc.add_tile([2,2,0], ttiles[3]);
 
     if AUTO_TRY {
         let interupt_flag = Arc::new(AtomicBool::new(false));
-        flag::register(signal_hook::consts::SIGINT, Arc::clone(&interupt_flag));
+        flag::register(signal_hook::consts::SIGINT, Arc::clone(&interupt_flag)).unwrap();
 
-        for try_num in 0..10_000 {
+        // this is important, because worldmap might have been initialised by add_tile()
+        let worldmap = wfc.worldmap.clone();
+        loop {
             if interupt_flag.load(Ordering::Relaxed) {
                 println!("\nReceived interrupt; Quiting...");
                 return;
             }
 
             ::std::thread::sleep(Duration::from_millis(1));
-            println!("Try #{} (seed: {})", try_num, seed);
-            loop {
-                if wfc.debug_break {
-                    break;
-                }
-                //println!("wfc_step");
-                let tile = match wfc.wfc_step() {
-                    Some(x) => x,
-                    None => break,
-                };
-                wfc.propagate(tile);
-            }
+            println!("Trying seed: {})", wfc.seed);
 
-            for tile in &wfc.worldmap.values {
-                if tile[0].col == 1 {
-                    wfc.print_worldmap();
-                    break
-                }
-            }
+            let result = match wfc.run() {
+                Ok(_) => true,
+                Err(_) => false,
+            };
 
-            if wfc.debug_break == STOP_ON_SUCCESS {
-                wfc.debug_break = false;
-                wfc.init_worldmap();
-                seed += 1;
-                wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
-            } else {
+            if STOP_ON_SUCCESS == result {
                 break;
             }
+            seed += 1;
+            wfc.init_rng(seed);
+            wfc.worldmap = worldmap.clone();
         }
+        wfc.print_worldmap();
+        return;
     }
 
-    return;
     let tilemap = texture_creator.load_texture(tilemap_path).unwrap();
-
-// instead of going to each tile and changing their possible tiles list
-// we can:
-// 1. start with empty Map[][]
-// 2. choose random point and select tile there (observer)
-// 3. for all adjesent tiles create list with valid tiles
-// 4. take note of these tiles
-// 5. (observer) random tile from list of tiles we took note of on step 4
-// 6. repeat from step 3
-
-// Also back tracking: before observing, save current map state, if during steps 3..6
-// we get to the point where map-square has no valid tile options, then restore map state
-// and remove tile we choose last time from a list. Pick new tile.
-
-// function observe() {
-  // 1. find tiles with length of stack above 1
-  // 2. choose random map-square from that list
-  // 3. choose random tile from stack list
-  // 4. propagate change in 4 directions
-
-  // propagation
-  // 1. compare choosen tile.connections and remove invalid tiles from stack
-  // IDEA: tbh stacks, in addition to holding tile indexes they should hold connection types they accept on each direction
-  // if after changing stack, connection types changed, then we have to propagate in
-  // those directions
+    let mut error_lock = false;
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -232,41 +195,43 @@ pub fn main() {
                     break 'running
                 },
                 Event::KeyDown { keycode: Some(Keycode::F), .. } => {
-                    if wfc.debug_break {
-                        println!("Locked via debug_break");
-                    } else {
-                        //println!("wfc_step");
-                        let tile = match wfc.wfc_step() {
-                            Some(x) => x,
-                            None => break,
-                        };
-                        wfc.propagate(tile);
+                    if error_lock {
+                        println!("Locked in error state. Press [R] to restart current seed or [N] to try new seed.");
                     }
+                    let tile = match wfc.collapse() {
+                        Some(x) => x,
+                        None => break,
+                    };
+                    match wfc.propagate(tile) {
+                        Err(e) => {
+                            println!("{}", e);
+                            error_lock = true;
+                        },
+                        _ => (),
+                    };
                 },
                 Event::KeyDown { keycode: Some(Keycode::N), .. } => {
                     wfc.init_worldmap();
                     seed += 1;
-                    wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
+                    wfc.init_rng(seed);
                     println!("-- seed {} --", seed);
                 },
                 Event::KeyDown { keycode: Some(Keycode::R), .. } => {
-                    wfc.debug_break = false;
                     wfc.init_worldmap();
-                    wfc.rng = rand::rngs::StdRng::seed_from_u64(seed);
+                    wfc.init_rng(seed);
                     println!("-- seed {} --", seed);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Q), .. } => {
-                    loop {
-                        if wfc.debug_break {
-                            break;
-                        }
-                        //println!("wfc_step");
-                        let tile = match wfc.wfc_step() {
-                            Some(x) => x,
-                            None => break,
-                        };
-                        wfc.propagate(tile);
+                    if error_lock {
+                        println!("Locked in error state. Press [R] to restart current seed or [N] to try new seed.");
                     }
+                    match wfc.run() {
+                        Err(e) => {
+                            println!("{}", e);
+                            error_lock = true;
+                        },
+                        _ => (),
+                    };
                 },
                 _ => {}
             }
@@ -282,8 +247,8 @@ pub fn main() {
             }
         } else {
             // draw world map
-            for x in 0..MAP_WIDTH {
-                for y in 0..MAP_HEIGHT {
+            for x in 0..x_size {
+                for y in 0..y_size {
                     let stack = &wfc.worldmap[(x,y)];
                     if stack.len() == 1 {
                         draw_wfc_tile(&mut canvas, &tilemap, &(stack[0]), x as u32, y as u32);

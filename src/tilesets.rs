@@ -123,6 +123,50 @@ pub fn flat_city() -> (String, Vec<WFC_Tile>) {
         connection_types: [3,3,3,3,0,0],
         angle: 0,
     });
+    tiles.push(WFC_Tile {
+        col: 5,
+        row: 0,
+        connection_types: [1,0,1,1,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 5,
+        row: 1,
+        connection_types: [1,0,0,0,0,0],
+        angle: 0,
+    });
+
+    return (tilemap, tiles);
+}
+
+pub fn flat_city_paths_only() -> (String, Vec<WFC_Tile>) {
+    let tilemap = String::from("./flat-city.png");
+
+    let mut tiles = Vec::new();
+    tiles.push(WFC_Tile {
+        col: 0,
+        row: 0,
+        connection_types: [1,1,1,1,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 2,
+        row: 0,
+        connection_types: [1,0,1,0,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 3,
+        row: 0,
+        connection_types: [1,1,0,0,0,0],
+        angle: 0,
+    });
+    tiles.push(WFC_Tile {
+        col: 5,
+        row: 0,
+        connection_types: [1,0,1,1,0,0],
+        angle: 0,
+    });
 
     return (tilemap, tiles);
 }
