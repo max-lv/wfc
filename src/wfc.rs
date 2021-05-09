@@ -274,14 +274,10 @@ impl WFC {
     }
 
     pub fn add_tile(&mut self, square: Position, tile: WfcTile) -> Result<(), String> {
-        if !self.worldmap[square].contains(&tile) {
-            return Err(String::from("no such tile in stack"));
-        }
-
         self.worldmap[square].clear();
         self.worldmap[square].push(tile);
 
-        self.propagate(square);
+        self.propagate(square)?;
 
         return Ok(());
     }

@@ -161,15 +161,8 @@ pub fn main() {
     println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
     let mut wfc = WFC::init(worldmap, ttiles, seed);
 
-    //wfc.add_tile([2,2,0], *ttiles[3].clone().rotate(2));
-    //wfc.add_tile([9,9,0], ttiles[3]);
-
-    wfc.worldmap[[2,2,0]].clear();
-    wfc.worldmap[[2,2,0]].push(*tiles[3].clone().rotate(2));
-    wfc.propagate([2,2,0]);
-    wfc.worldmap[[9,9,0]].clear();
-    wfc.worldmap[[9,9,0]].push(tiles[3]);
-    wfc.propagate([9,9,0]);
+    wfc.add_tile([2,2,0], *tiles[3].clone().rotate(2)).unwrap();
+    wfc.add_tile([9,9,0], tiles[3]).unwrap();
 
     for x in 0..x_size {
         for y in 0..y_size {
