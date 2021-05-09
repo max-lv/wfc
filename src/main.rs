@@ -48,14 +48,22 @@ fn draw_tile(canvas: &mut Canvas<Window>, tilemap: &Texture, col: u32, row: u32,
 }
 
 
+fn get_col_row(tile: &WfcTile, size: u32) -> (u32, u32) {
+    let col = tile.index % size;
+    let row = tile.index / size;
+    return (col, row);
+}
+
+
 fn draw_outline_circle(canvas: &mut Canvas<Window>, x: u32, y: u32, r: i16, color: Color) {
     canvas.filled_circle(x as i16, y as i16, r, Color::BLACK);
     canvas.filled_circle(x as i16, y as i16, r-4, color);
 }
 
 
-fn draw_wfc_tile(canvas: &mut Canvas<Window>, tilemap: &Texture, wfc_tile: &WFC_Tile, x: u32, y: u32) {
-    draw_tile(canvas, &tilemap, wfc_tile.col, wfc_tile.row, x, y, wfc_tile.angle as f64);
+fn draw_wfc_tile(canvas: &mut Canvas<Window>, tilemap: &Texture, wfc_tile: &WfcTile, size: u32, x: u32, y: u32) {
+    let (col, row) = get_col_row(wfc_tile, size);
+    draw_tile(canvas, &tilemap, col, row, x, y, wfc_tile.angle as f64);
 
     if !SHOW_CONNECTIONS {
         return;
@@ -88,7 +96,7 @@ fn draw_text_in_rect<A>(canvas: &mut Canvas<Window>, font: &sdl2::ttf::Font, tex
     canvas.copy(&font_texture, None, r);
 }
 
-fn draw_stack_of_tiles<A>(canvas: &mut Canvas<Window>, tilemap: &Texture, font: &sdl2::ttf::Font, texture_creator: &TextureCreator<A>, stack: &Vec<WFC_Tile>, x: i32, y: i32) {
+fn draw_stack_of_tiles<A>(canvas: &mut Canvas<Window>, tilemap: &Texture, font: &sdl2::ttf::Font, texture_creator: &TextureCreator<A>, stack: &Vec<WfcTile>, tilemap_size: u32, x: i32, y: i32) {
     for (i, tile) in (stack).iter().enumerate() {
         let half_tilesize = TILESIZE_SCALED/2;
         let xx = i as i32 %2;
@@ -105,9 +113,10 @@ fn draw_stack_of_tiles<A>(canvas: &mut Canvas<Window>, tilemap: &Texture, font: 
             break;
         }
 
+        let (col, row) = get_col_row(tile, tilemap_size);
         canvas.copy_ex(
             tilemap,
-            Rect::new((tile.col*TILESIZE) as i32, (tile.row*TILESIZE) as i32, TILESIZE, TILESIZE),
+            Rect::new((col*TILESIZE) as i32, (row*TILESIZE) as i32, TILESIZE, TILESIZE),
             Rect::new(x + xx*half_tilesize as i32, y + yy*half_tilesize as i32, half_tilesize, half_tilesize),
             tile.angle as f64,
             Point::new((half_tilesize/2) as i32, (half_tilesize/2) as i32),
@@ -140,18 +149,38 @@ pub fn main() {
     // load font
     let font = ttf_context.load_font("/home/terra/.local/share/fonts/Ubuntu-B.ttf", 128).unwrap();
 
-    //let (tilemap_path, tiles) = pipes();
-    //let (tilemap_path, tiles) = flat_city();
-    let (tilemap_path, tiles) = flat_city_paths_only();
+    //let (tilemap_path, tiles, tilemap_size) = pipes();
+    //let (tilemap_path, tiles, tilemap_size) = flat_city();
+    let (tilemap_path, tiles, tilemap_size) = flat_city_paths_only();
     //let (tilemap_path, tiles) = stairs_3d();
-    let ttiles = tiles.clone();
+    let mut ttiles = tiles.clone();
+    ttiles.pop();
     let mut seed = STARTING_SEED;
     let (x_size, y_size, z_size) = MAP_SIZE;
     let worldmap = Worldmap::new3d(x_size, y_size, z_size);
     println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
-    let mut wfc = WFC::init(worldmap, tiles, seed);
+    let mut wfc = WFC::init(worldmap, ttiles, seed);
 
-    wfc.add_tile([2,2,0], ttiles[3]);
+    //wfc.add_tile([2,2,0], *ttiles[3].clone().rotate(2));
+    //wfc.add_tile([9,9,0], ttiles[3]);
+
+    wfc.worldmap[[2,2,0]].clear();
+    wfc.worldmap[[2,2,0]].push(*tiles[3].clone().rotate(2));
+    wfc.propagate([2,2,0]);
+    wfc.worldmap[[9,9,0]].clear();
+    wfc.worldmap[[9,9,0]].push(tiles[3]);
+    wfc.propagate([9,9,0]);
+
+    for x in 0..x_size {
+        for y in 0..y_size {
+            if x == 0 || y == 0 || x == x_size-1 || y == y_size-1 {
+            wfc.worldmap[[x,y,0]].clear();
+            wfc.worldmap[[x,y,0]].push(tiles[0]);
+            wfc.propagate([x,y,0]);
+            }
+        }
+    }
+    let initial_worldmap = wfc.worldmap.clone();
 
     if AUTO_TRY {
         let interupt_flag = Arc::new(AtomicBool::new(false));
@@ -211,13 +240,13 @@ pub fn main() {
                     };
                 },
                 Event::KeyDown { keycode: Some(Keycode::N), .. } => {
-                    wfc.init_worldmap();
+                    wfc.worldmap = initial_worldmap.clone();
                     seed += 1;
                     wfc.init_rng(seed);
                     println!("-- seed {} --", seed);
                 },
                 Event::KeyDown { keycode: Some(Keycode::R), .. } => {
-                    wfc.init_worldmap();
+                    wfc.worldmap = initial_worldmap.clone();
                     wfc.init_rng(seed);
                     println!("-- seed {} --", seed);
                 },
@@ -242,8 +271,8 @@ pub fn main() {
         canvas.clear();
 
         if SHOW_TILESET {
-            for (i, tile) in ttiles.iter().enumerate() {
-                draw_wfc_tile(&mut canvas, &tilemap, tile, (i * 2) as u32, 4 as u32);
+            for (i, tile) in tiles.iter().enumerate() {
+                draw_wfc_tile(&mut canvas, &tilemap, tile, tilemap_size, (i * 2) as u32, 4 as u32);
             }
         } else {
             // draw world map
@@ -251,7 +280,7 @@ pub fn main() {
                 for y in 0..y_size {
                     let stack = &wfc.worldmap[(x,y)];
                     if stack.len() == 1 {
-                        draw_wfc_tile(&mut canvas, &tilemap, &(stack[0]), x as u32, y as u32);
+                        draw_wfc_tile(&mut canvas, &tilemap, &(stack[0]), tilemap_size, x as u32, y as u32);
                     } else {
                         draw_stack_of_tiles(
                             &mut canvas,
@@ -259,6 +288,7 @@ pub fn main() {
                             &font,
                             &texture_creator,
                             &stack,
+                            tilemap_size,
                             x as i32 * TILESIZE_SCALED as i32,
                             y as i32 * TILESIZE_SCALED as i32);
                     }

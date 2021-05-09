@@ -20,40 +20,45 @@ worldmap
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug)]
-pub struct WFC_Tile {
-    pub col: u32,
-    pub row: u32,
+pub struct WfcTile {
+    pub index: u32,
     pub connection_types: [usize; 6],
     pub angle: u32,
 }
 
-impl PartialEq for WFC_Tile {
+impl WfcTile {
+    pub fn rotate(&mut self, rot: u32) -> &Self {
+        self.angle = (self.angle + 90*rot) % 360;
+        let rot = rot as usize;
+        let arr = self.connection_types;
+
+        // FIXME: up/down rotation is an ugly hack
+        let mut up_dir = arr[4];
+        if arr[4] != 0 {
+            up_dir = arr[4] + (rot+1)*1000;
+        }
+        let mut down_dir = arr[5];
+        if arr[5] != 0 {
+            down_dir = arr[5] + (rot+1)*1000;
+        }
+        self.connection_types = [arr[rot % 4], arr[(rot+1) % 4], arr[(rot+2) % 4], arr[(rot+3) % 4], up_dir, down_dir];
+        return self;
+    }
+}
+
+impl PartialEq for WfcTile {
     fn eq(&self, other:&Self) -> bool {
-        self.col == other.col && self.row == other.row && self.connection_types == other.connection_types && self.angle == other.angle
+        self.index == other.index && self.connection_types == other.connection_types && self.angle == other.angle
     }
 }
-
-fn rotate_array(arr: [usize; 6], rot: usize) -> [usize; 6] {
-    let mut up_dir = arr[4];
-    if arr[4] != 0 {
-        up_dir = arr[4] + (rot+1)*1000;
-    }
-    let mut down_dir = arr[5];
-    if arr[5] != 0 {
-        down_dir = arr[5] + (rot+1)*1000;
-    }
-    return [arr[rot % 4], arr[(rot+1) % 4], arr[(rot+2) % 4], arr[(rot+3) % 4], up_dir, down_dir];
-}
-
 
 fn choose_random<'a, Any>(rng: &mut rand::rngs::StdRng, vec: &'a Vec<Any>) -> &'a Any {
     &vec[rng.gen_range(0..vec.len())]
 }
 
-
 #[derive(Clone)]
 pub struct Worldmap {
-    pub values: Vec<Vec<WFC_Tile>>,
+    pub values: Vec<Vec<WfcTile>>,
     pub size: [usize; 3],
     pub len: usize,
 }
@@ -107,57 +112,57 @@ impl Worldmap {
 // !!WATCH YOUR STEP!! Rust Hell Below
 // -----------------------------------
 impl std::ops::Index<usize> for Worldmap {
-    type Output = Vec<WFC_Tile>;
-    fn index<'a>(&'a self, idx: usize) -> &'a Vec<WFC_Tile> {
+    type Output = Vec<WfcTile>;
+    fn index<'a>(&'a self, idx: usize) -> &'a Vec<WfcTile> {
         return &self.values[idx]
     }
 }
 
 impl std::ops::IndexMut<usize> for Worldmap {
-    fn index_mut<'a>(&'a mut self, idx: usize) -> &'a mut Vec<WFC_Tile> {
+    fn index_mut<'a>(&'a mut self, idx: usize) -> &'a mut Vec<WfcTile> {
         return &mut self.values[idx]
     }
 }
 impl std::ops::Index<(usize, usize)> for Worldmap {
-    type Output = Vec<WFC_Tile>;
-    fn index<'a>(&'a self, idx: (usize, usize)) -> &'a Vec<WFC_Tile> {
+    type Output = Vec<WfcTile>;
+    fn index<'a>(&'a self, idx: (usize, usize)) -> &'a Vec<WfcTile> {
         let (x, y) = idx;
         return &self.values[x + y*self.size[0]]
     }
 }
 
 impl std::ops::IndexMut<(usize, usize)> for Worldmap {
-    fn index_mut<'a>(&'a mut self, idx: (usize, usize)) -> &'a mut Vec<WFC_Tile> {
+    fn index_mut<'a>(&'a mut self, idx: (usize, usize)) -> &'a mut Vec<WfcTile> {
         let (x, y) = idx;
         return &mut self.values[x + y*self.size[0]]
     }
 }
 
 impl std::ops::Index<(usize, usize, usize)> for Worldmap {
-    type Output = Vec<WFC_Tile>;
-    fn index<'a>(&'a self, idx: (usize, usize, usize)) -> &'a Vec<WFC_Tile> {
+    type Output = Vec<WfcTile>;
+    fn index<'a>(&'a self, idx: (usize, usize, usize)) -> &'a Vec<WfcTile> {
         let (x, y, z) = idx;
         return &self.values[x + y*self.size[0] + z*self.size[0]*self.size[1]]
     }
 }
 
 impl std::ops::IndexMut<(usize, usize, usize)> for Worldmap {
-    fn index_mut<'a>(&'a mut self, idx: (usize, usize, usize)) -> &'a mut Vec<WFC_Tile> {
+    fn index_mut<'a>(&'a mut self, idx: (usize, usize, usize)) -> &'a mut Vec<WfcTile> {
         let (x, y, z) = idx;
         return &mut self.values[x + y*self.size[0] + z*self.size[0]*self.size[1]]
     }
 }
 
 impl std::ops::Index<Position> for Worldmap {
-    type Output = Vec<WFC_Tile>;
-    fn index<'a>(&'a self, idx: Position) -> &'a Vec<WFC_Tile> {
+    type Output = Vec<WfcTile>;
+    fn index<'a>(&'a self, idx: Position) -> &'a Vec<WfcTile> {
         let [x, y, z] = idx;
         return &self.values[x + y*self.size[0] + z*self.size[0]*self.size[1]]
     }
 }
 
 impl std::ops::IndexMut<Position> for Worldmap {
-    fn index_mut<'a>(&'a mut self, idx: Position) -> &'a mut Vec<WFC_Tile> {
+    fn index_mut<'a>(&'a mut self, idx: Position) -> &'a mut Vec<WfcTile> {
         let [x, y, z] = idx;
         return &mut self.values[x + y*self.size[0] + z*self.size[0]*self.size[1]]
     }
@@ -165,7 +170,7 @@ impl std::ops::IndexMut<Position> for Worldmap {
 
 
 type Position = [usize; 3];
-enum Direction {NORTH, EAST, SOUTH, WEST, UP, DOWN}
+pub enum Direction {NORTH, EAST, SOUTH, WEST, UP, DOWN}
 
 impl Direction {
     fn flip(&self) -> Direction {
@@ -194,7 +199,7 @@ impl Into<usize> for Direction {
 }
 
 pub struct WFC {
-    pub tiles: Vec<WFC_Tile>,
+    pub tiles: Vec<WfcTile>,
     pub worldmap: Worldmap,
     pub seed: u64,
     rng: rand::rngs::StdRng,
@@ -202,7 +207,7 @@ pub struct WFC {
 
 impl WFC {
     // TODO: worldmap should hold indexes into tiles
-    pub fn init(worldmap: Worldmap, tiles: Vec<WFC_Tile>, seed: u64) -> WFC {
+    pub fn init(worldmap: Worldmap, tiles: Vec<WfcTile>, seed: u64) -> WFC {
         let mut wfc = WFC {
             tiles,
             worldmap,
@@ -218,18 +223,14 @@ impl WFC {
         self.rng = rand::rngs::StdRng::seed_from_u64(seed);
     }
 
-    fn init_tile(tiles: &Vec<WFC_Tile>, square: &mut Vec<WFC_Tile>) {
+    fn init_tile(tiles: &Vec<WfcTile>, square: &mut Vec<WfcTile>) {
         square.clear();
         for tile in tiles {
             for i in 0..4 {
                 // TODO: worldmap could have stored u16 indexes into self.tiles, would be alot more
                 // compact!
-                let new_wfc_tile = WFC_Tile {
-                    col: tile.col,
-                    row: tile.row,
-                    connection_types: rotate_array(tile.connection_types, i),
-                    angle: (i*90) as u32,
-                };
+                let mut new_wfc_tile = tile.clone();
+                new_wfc_tile.rotate(i);
                 square.push(new_wfc_tile);
             }
         }
@@ -250,8 +251,8 @@ impl WFC {
             for y in 0..YS {
                 for z in 0..ZS {
                     let tile = self.worldmap[(x,y,z)][0];
-                    if tile.col == 0 { continue; }
-                    print!("({}, {}, {}, {}, {}), ", x, y, z, tile.angle, tile.col);
+                    if tile.index == 0 { continue; }
+                    print!("({}, {}, {}, {}, {}), ", x, y, z, tile.angle, tile.index);
                 }
             }
             println!("");
@@ -272,7 +273,7 @@ impl WFC {
         return available_squares;
     }
 
-    pub fn add_tile(&mut self, square: Position, tile: WFC_Tile) -> Result<(), String> {
+    pub fn add_tile(&mut self, square: Position, tile: WfcTile) -> Result<(), String> {
         if !self.worldmap[square].contains(&tile) {
             return Err(String::from("no such tile in stack"));
         }
@@ -328,7 +329,7 @@ impl WFC {
             return Ok(false);
         }
 
-        let mut ok_stack = Vec::<WFC_Tile>::with_capacity(5);
+        let mut ok_stack = Vec::<WfcTile>::with_capacity(5);
 
         let stack = &self.worldmap[square];
         for tile in stack {
