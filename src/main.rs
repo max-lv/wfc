@@ -23,7 +23,7 @@ const AUTO_TRY: bool = false;
 const STOP_ON_SUCCESS: bool = true;
 const STARTING_SEED: u64 = 144;
 
-const TILESIZE: u32 = 8;
+const TILESIZE: u32 = 10;
 const SCALE: u32 = 5;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
 const MAP_SIZE: (usize, usize, usize) = ((800/TILESIZE/SCALE) as usize, (600/TILESIZE/SCALE) as usize, 1);
@@ -125,6 +125,27 @@ fn draw_stack_of_tiles<A>(canvas: &mut Canvas<Window>, tilemap: &Texture, font: 
     }
 }
 
+fn test_path(worldmap: Worldmap, seed: u64, size: (usize, usize)) -> (WFC, Vec<WfcTile>, String, u32) {
+    let (tilemap_path, tiles, tilemap_size) = flat_city_paths_only();
+    let mut ttiles = tiles.clone();
+    ttiles.pop();
+    let mut wfc = WFC::init(worldmap, ttiles, seed);
+
+    wfc.add_tile([2,2,0], *tiles[3].clone().rotate(2)).unwrap();
+    wfc.add_tile([9,9,0], tiles[3]).unwrap();
+
+    let (x_size, y_size) = size;
+    for x in 0..x_size {
+        for y in 0..y_size {
+            if x == 0 || y == 0 || x == x_size-1 || y == y_size-1 {
+            wfc.worldmap[[x,y,0]].clear();
+            wfc.worldmap[[x,y,0]].push(tiles[0]);
+            wfc.propagate([x,y,0]);
+            }
+        }
+    }
+    return (wfc, tiles, tilemap_path, tilemap_size)
+}
 
 pub fn main() {
     better_panic::install();
@@ -149,30 +170,18 @@ pub fn main() {
     // load font
     let font = ttf_context.load_font("/home/terra/.local/share/fonts/Ubuntu-B.ttf", 128).unwrap();
 
-    //let (tilemap_path, tiles, tilemap_size) = pipes();
-    //let (tilemap_path, tiles, tilemap_size) = flat_city();
-    let (tilemap_path, tiles, tilemap_size) = flat_city_paths_only();
-    //let (tilemap_path, tiles) = stairs_3d();
-    let mut ttiles = tiles.clone();
-    ttiles.pop();
     let mut seed = STARTING_SEED;
     let (x_size, y_size, z_size) = MAP_SIZE;
     let worldmap = Worldmap::new3d(x_size, y_size, z_size);
     println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
-    let mut wfc = WFC::init(worldmap, ttiles, seed);
 
-    wfc.add_tile([2,2,0], *tiles[3].clone().rotate(2)).unwrap();
-    wfc.add_tile([9,9,0], tiles[3]).unwrap();
+    //let (mut wfc, tiles, tilemap_path, tilemap_size) = test_path(worldmap, seed, (x_size, y_size));
+    let (tilemap_path, tiles, tilemap_size) = pipes();
+    //let (tilemap_path, tiles, tilemap_size) = pipes();
+    //let (tilemap_path, tiles, tilemap_size) = flat_city();
+    //let (tilemap_path, tiles) = stairs_3d();
+    let mut wfc = WFC::init(worldmap, tiles.clone(), seed);
 
-    for x in 0..x_size {
-        for y in 0..y_size {
-            if x == 0 || y == 0 || x == x_size-1 || y == y_size-1 {
-            wfc.worldmap[[x,y,0]].clear();
-            wfc.worldmap[[x,y,0]].push(tiles[0]);
-            wfc.propagate([x,y,0]);
-            }
-        }
-    }
     let initial_worldmap = wfc.worldmap.clone();
 
     if AUTO_TRY {
