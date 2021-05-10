@@ -176,10 +176,117 @@ pub fn main() {
     println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
 
     //let (mut wfc, tiles, tilemap_path, tilemap_size) = test_path(worldmap, seed, (x_size, y_size));
-    let (tilemap_path, tiles, tilemap_size) = pipes();
+    let (tilemap_path, mut tiles, tilemap_size) = pipes();
     //let (tilemap_path, tiles, tilemap_size) = pipes();
     //let (tilemap_path, tiles, tilemap_size) = flat_city();
     //let (tilemap_path, tiles) = stairs_3d();
+
+    // TODO: extract function
+    let mut big_tile_parts = Vec::<WfcTile>::new();
+    let mut big_tile: Vec<i32> = vec![
+        0,   0,   -1,   0,   0,
+        2, 4*2+0, -1, 4*2+1, 1,
+        -1, -1,   -1,  -1,  -1,
+        1, 4*3+0, -1, 4*3+1, 2,
+        0,   0,   -1,   0,   0,
+    ];
+    let mut i = 1000;
+    for x in &[1, 3] {
+    for y in &[1, 3] {
+        let pos = y*5 + x;
+        println!("x {} y {} pos {}", x, y, pos);
+
+
+
+        let ppos = pos - 5;
+        if big_tile[ppos] == -1 {
+            big_tile[ppos] = i;
+            i+= 1;
+        }
+        let north = big_tile[ppos];
+
+        let ppos = pos + 5;
+        if big_tile[ppos] == -1 {
+            big_tile[ppos] = i;
+            i+= 1;
+        }
+        let south = big_tile[ppos];
+
+        let ppos = pos - 1;
+        if big_tile[ppos] == -1 {
+            big_tile[ppos] = i;
+            i+= 1;
+        }
+        let east = big_tile[ppos];
+
+        let ppos = pos + 1;
+        if big_tile[ppos] == -1 {
+            big_tile[ppos] = i;
+            i+= 1;
+        }
+        let west = big_tile[ppos];
+
+
+
+        big_tile_parts.push(WfcTile {
+            index: big_tile[pos] as u32,
+            connection_types: [north as usize, east as usize, south as usize, west as usize, 0,0],
+            angle: 0,
+            is_rotatable: false,
+        });
+        println!("{:?}", big_tile_parts[big_tile_parts.len() - 1]);
+        for chunk in big_tile.chunks(5) {
+            for v in chunk {
+                print!("{:^4} ", v);
+            }
+            println!("");
+        }
+        println!("-----------------------");
+    }
+    }
+    // TODO:
+    // No need to make Symmetry enum, I can guess in code which rotations are need bases on
+    // connection_types. Like why would I ever want to drop that work on poor user? >:)
+    // However I need no_rotation flag/bool
+    // and something more elegant than multiplying connections by 1000, for example:
+    //   have connection_types store tuple of (u16,u16), so user has u16 for his connections, and
+    //   then I have u16 for internal connections.
+
+    // add rotations
+    for _tile in &big_tile_parts {
+        for rot in 1..=1 {
+            let mut tile = _tile.clone();
+            tile.rotate(rot as u32);
+            for i in 0..6 {
+                if tile.connection_types[i] >= 1000 {
+                    tile.connection_types[i] *= rot+1;
+                }
+            }
+            println!("{:?}", tile);
+            tiles.push(tile)
+        }
+    }
+    tiles.extend(big_tile_parts);
+//    tiles.push(WfcTile {
+//        index: 4*2 + 0,
+//        connection_types: [0,2,13,10,0,0],
+//        angle: 1,
+//    });
+//    tiles.push(WfcTile {
+//        index: 4*2 + 1,
+//        connection_types: [0,10,11,1,0,0],
+//        angle: 1,
+//    });
+//    tiles.push(WfcTile {
+//        index: 4*3 + 0,
+//        connection_types: [13,1,0,12,0,0],
+//        angle: 1,
+//    });
+//    tiles.push(WfcTile {
+//        index: 4*3 + 1,
+//        connection_types: [11,12,0,2,0,0],
+//        angle: 1,
+//    });
     let mut wfc = WFC::init(worldmap, tiles.clone(), seed);
 
     let initial_worldmap = wfc.worldmap.clone();

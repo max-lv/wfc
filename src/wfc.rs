@@ -24,6 +24,7 @@ pub struct WfcTile {
     pub index: u32,
     pub connection_types: [usize; 6],
     pub angle: u32,
+    pub is_rotatable: bool,
 }
 
 impl WfcTile {
@@ -226,9 +227,12 @@ impl WFC {
     fn init_tile(tiles: &Vec<WfcTile>, square: &mut Vec<WfcTile>) {
         square.clear();
         for tile in tiles {
+            if !tile.is_rotatable {
+                square.push(tile.clone());
+                continue
+            }
+
             for i in 0..4 {
-                // TODO: worldmap could have stored u16 indexes into self.tiles, would be alot more
-                // compact!
                 let mut new_wfc_tile = tile.clone();
                 new_wfc_tile.rotate(i);
                 square.push(new_wfc_tile);
