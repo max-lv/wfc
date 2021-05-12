@@ -285,6 +285,22 @@ impl WFC {
                 continue
             }
 
+            // skip fully symmetrical tiles
+            if tile.connection_types[0..4].iter().filter(|&x| *x != tile.connection_types[0]).collect::<Vec<&usize>>().len() == 0 {
+                square.push(tile.clone());
+                continue;
+            }
+            // TODO:
+            // I-symmetry
+            if tile.connection_types[0] == tile.connection_types[2] && tile.connection_types[1] == tile.connection_types [3] {
+                square.push(*tile.clone().rotate(1));
+                square.push(tile.clone());
+                continue;
+            }
+
+            // All four rotations are needed
+            // L-symmetry
+            // T-symmetry
             for i in 0..4 {
                 let mut new_wfc_tile = tile.clone();
                 new_wfc_tile.rotate(i);
