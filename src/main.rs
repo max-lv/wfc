@@ -24,11 +24,11 @@ const STOP_ON_SUCCESS: bool = true;
 const STARTING_SEED: u64 = 204;
 
 const TILESIZE: u32 = 10;
-const SCALE: u32 = 2;
+const SCALE: u32 = 20;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
-const MAP_SIZE: (usize, usize, usize) = ((800/TILESIZE/SCALE) as usize, (600/TILESIZE/SCALE) as usize, 1);
+//const MAP_SIZE: (usize, usize, usize) = ((800/TILESIZE/SCALE) as usize, (600/TILESIZE/SCALE) as usize, 1);
 //const MAP_SIZE: (usize, usize, usize) = (10, 10, 7);
-//const MAP_SIZE: (usize, usize, usize) = (4, 4, 1);
+const MAP_SIZE: (usize, usize, usize) = (1, 1, 1);
 
 const CON_TYPE_COLORS: [Color;3] = [
     Color::RED,
@@ -228,7 +228,7 @@ pub fn main() {
     // add rotations
     for _tile in &big_tile_parts {
         //for rot in 1..=1 { // X-tile only needs these rotations
-        for rot in 0..=2 {
+        for rot in 0..4 {
             let mut tile = _tile.clone();
             tile.rotate(rot as u32);
             for i in 0..6 {
@@ -240,7 +240,6 @@ pub fn main() {
             tiles.push(tile)
         }
     }
-    tiles.extend(big_tile_parts);
 //    tiles.push(WfcTile {
 //        index: 4*2 + 0,
 //        connection_types: [0,2,13,10,0,0],
