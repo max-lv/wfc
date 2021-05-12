@@ -21,13 +21,14 @@ const SHOW_CONNECTIONS: bool = false;
 const SHOW_TILESET: bool = false;
 const AUTO_TRY: bool = false;
 const STOP_ON_SUCCESS: bool = true;
-const STARTING_SEED: u64 = 144;
+const STARTING_SEED: u64 = 204;
 
 const TILESIZE: u32 = 10;
 const SCALE: u32 = 5;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
-const MAP_SIZE: (usize, usize, usize) = ((800/TILESIZE/SCALE) as usize, (600/TILESIZE/SCALE) as usize, 1);
+//const MAP_SIZE: (usize, usize, usize) = ((800/TILESIZE/SCALE) as usize, (600/TILESIZE/SCALE) as usize, 1);
 //const MAP_SIZE: (usize, usize, usize) = (10, 10, 7);
+const MAP_SIZE: (usize, usize, usize) = (4, 4, 1);
 
 const CON_TYPE_COLORS: [Color;3] = [
     Color::RED,
@@ -181,80 +182,47 @@ pub fn main() {
     //let (tilemap_path, tiles, tilemap_size) = flat_city();
     //let (tilemap_path, tiles) = stairs_3d();
 
-    // TODO: extract function
-    let mut big_tile_parts = Vec::<WfcTile>::new();
-    let mut big_tile: Vec<i32> = vec![
-        0,   0,   -1,   0,   0,
-        2, 4*2+0, -1, 4*2+1, 1,
-        -1, -1,   -1,  -1,  -1,
-        1, 4*3+0, -1, 4*3+1, 2,
-        0,   0,   -1,   0,   0,
-    ];
-    let mut i = 1000;
-    for x in &[1, 3] {
-    for y in &[1, 3] {
-        let pos = y*5 + x;
-        println!("x {} y {} pos {}", x, y, pos);
-
-
-
-        let ppos = pos - 5;
-        if big_tile[ppos] == -1 {
-            big_tile[ppos] = i;
-            i+= 1;
-        }
-        let north = big_tile[ppos];
-
-        let ppos = pos + 5;
-        if big_tile[ppos] == -1 {
-            big_tile[ppos] = i;
-            i+= 1;
-        }
-        let south = big_tile[ppos];
-
-        let ppos = pos - 1;
-        if big_tile[ppos] == -1 {
-            big_tile[ppos] = i;
-            i+= 1;
-        }
-        let east = big_tile[ppos];
-
-        let ppos = pos + 1;
-        if big_tile[ppos] == -1 {
-            big_tile[ppos] = i;
-            i+= 1;
-        }
-        let west = big_tile[ppos];
-
-
-
-        big_tile_parts.push(WfcTile {
-            index: big_tile[pos] as u32,
-            connection_types: [north as usize, east as usize, south as usize, west as usize, 0,0],
-            angle: 0,
-            is_rotatable: false,
-        });
-        println!("{:?}", big_tile_parts[big_tile_parts.len() - 1]);
-        for chunk in big_tile.chunks(5) {
-            for v in chunk {
-                print!("{:^4} ", v);
-            }
-            println!("");
-        }
-        println!("-----------------------");
-    }
-    }
     // TODO:
-    // No need to make Symmetry enum, I can guess in code which rotations are need bases on
-    // connection_types. Like why would I ever want to drop that work on poor user? >:)
-    // However I need no_rotation flag/bool
-    // and something more elegant than multiplying connections by 1000, for example:
+    // - show window (aka see results)
+    //   + pipes with cross-tile
+    //   - pipes with L-tile
+    //   - pipes with both big-tiles
+    // - add Z direction
+    // - 3d (replace stairs hack with bigtile)
+    // - extract function
+    // TODO: how to show non-existent connections and not use Option??
+    let bbig_tile1 = vec![
+        Some((4*2+0, [0,2,0,0,0,0])), Some((4*2+1, [0,0,0,1,0,0])),
+        Some((4*3+0, [0,1,0,0,0,0])), Some((4*3+1, [0,0,0,2,0,0])),
+    ];
+    let bbig_tile2 = vec![
+        Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [2,9,2,1,0,0])),
+        Some((4*3+2, [9,0,1,0,0,0])), None,
+    ];
+    let size = (2,2,1);
+    let big_tile_parts = create_big_tile(size, bbig_tile2);
+    for t in &big_tile_parts {
+        println!("{:?}", t);
+    }
+
+//    for chunk in rv.chunks(7) {
+//        for v in chunk {
+//            print!("{:^4} ", v);
+//        }
+//        println!("");
+//    }
+
+    // TODO:
+    // - guess how many times tile has to be rotated based on the connection_types
+    //   - same for big-tiles
+    // - something more elegant than multiplying connections by 1000, for example:
     //   have connection_types store tuple of (u16,u16), so user has u16 for his connections, and
     //   then I have u16 for internal connections.
 
     // add rotations
     for _tile in &big_tile_parts {
-        for rot in 1..=1 {
+        //for rot in 1..=1 { // X-tile only needs these rotations
+        for rot in 0..=2 {
             let mut tile = _tile.clone();
             tile.rotate(rot as u32);
             for i in 0..6 {
