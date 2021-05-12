@@ -356,12 +356,30 @@ impl WFC {
     }
 
     pub fn wfc_step(&mut self) -> Result<bool, String> {
-        let tile = match self.collapse() {
-            Some(x) => x,
-            None => return Ok(true),
-        };
-        self.propagate(tile)?;
-        return Ok(false);
+        let mut worldmap_copy = self.worldmap.clone();
+
+        loop {
+            let square = match self.collapse() {
+                Some(x) => x,
+                None => return Ok(true),
+            };
+
+            match self.propagate(square) {
+                Ok(_) => return Ok(false),
+                Err(_) => {
+                    // backtrack / error recovery
+
+                    if worldmap_copy[square].len() == 1 {
+                        return Err(format!("error: collapse of square {:?} resulted in an empty stack after trying all available tiles", square));
+                    }
+
+                    // remove selected tile from list of available
+                    worldmap_copy[square].retain(|&x| x != self.worldmap[square][0]);
+                    self.worldmap = worldmap_copy.clone();
+                    println!("Backtracking for square {:?}", square);
+                },
+            };
+        }
     }
 
     pub fn collapse(&mut self) -> Option<Position> {
@@ -394,9 +412,9 @@ impl WFC {
         //        probably should put it into WFC struct.
         //        can be calculated from original tiles.
         // TODO: self.worldmap.max_connections(dir) -> usize
-        if connections.len() == 4 {
-            return Ok(false);
-        }
+        //if connections.len() == 4 {
+        //    return Ok(false);
+        //}
 
         let mut ok_stack = Vec::<WfcTile>::with_capacity(5);
 
@@ -409,13 +427,16 @@ impl WFC {
             ok_stack.push(*tile);
         }
         if self.worldmap[square].len() == ok_stack.len() {
+            //println!("  stack didn't change");
             return Ok(false);
         }
         if ok_stack.len() == 0 {
+            //println!("  stack empty");
             return Err(format!("error: tile-stack reduced to 0!!!  tile: {:?}", square));
         }
         self.worldmap[square] = ok_stack;
 //        println!("update_tile_stack has changed connections {:?}", map_square);
+        //println!("  stack changed");
         return Ok(true);
     }
 
@@ -437,6 +458,7 @@ impl WFC {
     // wfc3d: map_square probably can be anything
     pub fn propagate(&mut self, square: Position) -> Result<(), String> {
         let connections = self.gather_available_connections(square);
+        //println!("propagate {:?} connections: {:?}", square, connections);
 
         // clear direction
         let is_recurse0 = self.update_tile_stack(&connections[0], square, Direction::NORTH)?;
@@ -447,12 +469,12 @@ impl WFC {
         let is_recurse5 = self.update_tile_stack(&connections[5], square, Direction::DOWN)?;
 
         // recurse in that direction
-        if is_recurse0 { self.propagate(self.worldmap.move_(square, &Direction::NORTH).unwrap()); }
-        if is_recurse1 { self.propagate(self.worldmap.move_(square, &Direction::EAST).unwrap()); }
-        if is_recurse2 { self.propagate(self.worldmap.move_(square, &Direction::SOUTH).unwrap()); }
-        if is_recurse3 { self.propagate(self.worldmap.move_(square, &Direction::WEST).unwrap()); }
-        if is_recurse4 { self.propagate(self.worldmap.move_(square, &Direction::UP).unwrap()); }
-        if is_recurse5 { self.propagate(self.worldmap.move_(square, &Direction::DOWN).unwrap()); }
+        if is_recurse0 { self.propagate(self.worldmap.move_(square, &Direction::NORTH).unwrap())?; }
+        if is_recurse1 { self.propagate(self.worldmap.move_(square, &Direction::EAST).unwrap())?; }
+        if is_recurse2 { self.propagate(self.worldmap.move_(square, &Direction::SOUTH).unwrap())?; }
+        if is_recurse3 { self.propagate(self.worldmap.move_(square, &Direction::WEST).unwrap())?; }
+        if is_recurse4 { self.propagate(self.worldmap.move_(square, &Direction::UP).unwrap())?; }
+        if is_recurse5 { self.propagate(self.worldmap.move_(square, &Direction::DOWN).unwrap())?; }
 
         return Ok(());
     }

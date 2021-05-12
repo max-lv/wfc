@@ -24,11 +24,11 @@ const STOP_ON_SUCCESS: bool = true;
 const STARTING_SEED: u64 = 204;
 
 const TILESIZE: u32 = 10;
-const SCALE: u32 = 5;
+const SCALE: u32 = 2;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
-//const MAP_SIZE: (usize, usize, usize) = ((800/TILESIZE/SCALE) as usize, (600/TILESIZE/SCALE) as usize, 1);
+const MAP_SIZE: (usize, usize, usize) = ((800/TILESIZE/SCALE) as usize, (600/TILESIZE/SCALE) as usize, 1);
 //const MAP_SIZE: (usize, usize, usize) = (10, 10, 7);
-const MAP_SIZE: (usize, usize, usize) = (4, 4, 1);
+//const MAP_SIZE: (usize, usize, usize) = (4, 4, 1);
 
 const CON_TYPE_COLORS: [Color;3] = [
     Color::RED,
@@ -98,18 +98,20 @@ fn draw_text_in_rect<A>(canvas: &mut Canvas<Window>, font: &sdl2::ttf::Font, tex
 }
 
 fn draw_stack_of_tiles<A>(canvas: &mut Canvas<Window>, tilemap: &Texture, font: &sdl2::ttf::Font, texture_creator: &TextureCreator<A>, stack: &Vec<WfcTile>, tilemap_size: u32, x: i32, y: i32) {
+    let stack_size: i32 = 6;
+    let stack_len: usize = (stack_size*stack_size - 1) as usize;
     for (i, tile) in (stack).iter().enumerate() {
-        let half_tilesize = TILESIZE_SCALED/2;
-        let xx = i as i32 %2;
-        let yy = i as i32 /2;
+        let half_tilesize = TILESIZE_SCALED / stack_size as u32;
+        let xx = i as i32 % stack_size;
+        let yy = i as i32 / stack_size;
 
-        if i>=3 {
+        if i>=stack_len {
             draw_text_in_rect(
                 canvas,
                 &font,
                 &texture_creator,
                 Rect::new(x + xx*half_tilesize as i32, y + yy*half_tilesize as i32, half_tilesize, half_tilesize),
-                &((stack.len()-3).to_string()),
+                &((stack.len() - stack_len).to_string()),
                 Color::WHITE);
             break;
         }
@@ -190,17 +192,21 @@ pub fn main() {
     // - add Z direction
     // - 3d (replace stairs hack with bigtile)
     // - extract function
-    // TODO: how to show non-existent connections and not use Option??
-    let bbig_tile1 = vec![
-        Some((4*2+0, [0,2,0,0,0,0])), Some((4*2+1, [0,0,0,1,0,0])),
-        Some((4*3+0, [0,1,0,0,0,0])), Some((4*3+1, [0,0,0,2,0,0])),
-    ];
-    let bbig_tile2 = vec![
+
+//    let bbig_tile1 = vec![
+//        Some((4*2+0, [0,2,0,0,0,0])), Some((4*2+1, [0,0,0,1,0,0])),
+//        Some((4*3+0, [0,1,0,0,0,0])), Some((4*3+1, [0,0,0,2,0,0])),
+//    ];
+//    let bbig_tile2 = vec![
+//        Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [2,9,2,1,0,0])),
+//        Some((4*3+2, [9,0,1,0,0,0])), None,
+//    ];
+//    let size = (2,2,1);
+//    let big_tile_parts = create_big_tile(size, bbig_tile2);
+    let big_tile_parts = create_big_tile((2,2,1), vec![
         Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [2,9,2,1,0,0])),
         Some((4*3+2, [9,0,1,0,0,0])), None,
-    ];
-    let size = (2,2,1);
-    let big_tile_parts = create_big_tile(size, bbig_tile2);
+    ]);
     for t in &big_tile_parts {
         println!("{:?}", t);
     }
@@ -303,18 +309,16 @@ pub fn main() {
                 Event::KeyDown { keycode: Some(Keycode::F), .. } => {
                     if error_lock {
                         println!("Locked in error state. Press [R] to restart current seed or [N] to try new seed.");
+                        continue;
                     }
-                    let tile = match wfc.collapse() {
-                        Some(x) => x,
-                        None => break,
-                    };
-                    match wfc.propagate(tile) {
+
+                    match wfc.wfc_step() {
                         Err(e) => {
-                            println!("{}", e);
-                            error_lock = true;
-                        },
-                        _ => (),
-                    };
+                              println!("{}", e);
+                              error_lock = true;
+                          },
+                          _ => (),
+                    }
                 },
                 Event::KeyDown { keycode: Some(Keycode::N), .. } => {
                     wfc.worldmap = initial_worldmap.clone();
@@ -325,6 +329,7 @@ pub fn main() {
                 Event::KeyDown { keycode: Some(Keycode::R), .. } => {
                     wfc.worldmap = initial_worldmap.clone();
                     wfc.init_rng(seed);
+                    error_lock = false;
                     println!("-- seed {} --", seed);
                 },
                 Event::KeyDown { keycode: Some(Keycode::Q), .. } => {
