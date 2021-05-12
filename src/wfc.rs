@@ -57,7 +57,7 @@ fn choose_random<'a, Any>(rng: &mut rand::rngs::StdRng, vec: &'a Vec<Any>) -> &'
     &vec[rng.gen_range(0..vec.len())]
 }
 
-pub fn create_big_tile(size: (usize, usize, usize), big_tile: Vec<Option<(u32, [usize;6])>>) -> Vec<WfcTile> {
+pub fn create_big_tile(gen_con: &mut usize, size: (usize, usize, usize), big_tile: Vec<Option<(u32, [usize;6])>>) -> Vec<WfcTile> {
     let mut wfc_big_tile = big_tile.iter().map(|tile|
         match tile {
             Some((idx, connections)) => Some(WfcTile {
@@ -70,7 +70,6 @@ pub fn create_big_tile(size: (usize, usize, usize), big_tile: Vec<Option<(u32, [
         }).collect::<Vec<Option<WfcTile>>>();
     let (x_size, y_size, z_size) = size;
 
-    let mut gen_con = 1000;
     for y in 0..y_size {
     for x in 0..x_size {
         let pos = y*x_size + x;
@@ -86,9 +85,9 @@ pub fn create_big_tile(size: (usize, usize, usize), big_tile: Vec<Option<(u32, [
             let ppos = (y as usize -1)*x_size + x as usize;
             // generate connection
             if wfc_big_tile[ppos] != None {
-                wfc_big_tile[ pos].as_mut().unwrap().connection_types[0] = gen_con; // north
-                wfc_big_tile[ppos].as_mut().unwrap().connection_types[2] = gen_con; // south
-                gen_con += 1;
+                wfc_big_tile[ pos].as_mut().unwrap().connection_types[0] = *gen_con; // north
+                wfc_big_tile[ppos].as_mut().unwrap().connection_types[2] = *gen_con; // south
+                *gen_con += 1;
             }
         }
 
@@ -97,9 +96,9 @@ pub fn create_big_tile(size: (usize, usize, usize), big_tile: Vec<Option<(u32, [
             let ppos = y as usize * x_size + x as usize - 1;
             // generate connection
             if wfc_big_tile[ppos] != None {
-                wfc_big_tile[ pos].as_mut().unwrap().connection_types[1] = gen_con; // west
-                wfc_big_tile[ppos].as_mut().unwrap().connection_types[3] = gen_con; // east
-                gen_con += 1;
+                wfc_big_tile[ pos].as_mut().unwrap().connection_types[1] = *gen_con; // west
+                wfc_big_tile[ppos].as_mut().unwrap().connection_types[3] = *gen_con; // east
+                *gen_con += 1;
             }
         }
 
@@ -107,7 +106,28 @@ pub fn create_big_tile(size: (usize, usize, usize), big_tile: Vec<Option<(u32, [
         // TODO
     }
     }
-    return wfc_big_tile.into_iter().flat_map(|x| x.into_iter()).collect();
+
+    // add rotations
+    // TODO: avoid duplicated rotations when tile is symmetrical.
+    // TODO: something more elegant than multiplying connections by 1000, for example:
+    //       have connection_types store tuple of (u16,u16), so user has u16 for his connections, and
+    //       then I have u16 for internal connections.
+    let wfc_big_tile: Vec<WfcTile> = wfc_big_tile.into_iter().flat_map(|x| x.into_iter()).collect();
+    let mut rv = Vec::<WfcTile>::with_capacity(wfc_big_tile.len()*4);
+    for _tile in &wfc_big_tile {
+        for rot in 0..4 {
+            let mut tile = _tile.clone();
+            tile.rotate(rot as u32);
+            for i in 0..6 {
+                if tile.connection_types[i] >= 1000 {
+                    tile.connection_types[i] *= rot+1;
+                }
+            }
+            println!("{:?}", tile);
+            rv.push(tile)
+        }
+    }
+    return rv;
 }
 
 #[derive(Clone)]
