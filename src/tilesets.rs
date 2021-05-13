@@ -1,5 +1,5 @@
 
-use crate::wfc::{WfcTile};
+use crate::wfc::{WfcTile, create_big_tile};
 
 pub fn pipes() -> (String, Vec<WfcTile>, u32) {
     let tilemap = String::from("./pipes_tileset.png");
@@ -54,6 +54,16 @@ pub fn pipes() -> (String, Vec<WfcTile>, u32) {
         angle: 0,
         is_rotatable: true,
     });
+    // big-tiles
+    let mut conn = 1000;
+    tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
+        Some((4*2+0, [0,2,0,0,0,0])), Some((4*2+1, [0,0,0,1,0,0])),
+        Some((4*3+0, [0,1,0,0,0,0])), Some((4*3+1, [0,0,0,2,0,0])),
+    ]));
+    tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
+        Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [0,9,0,1,0,0])),
+        Some((4*3+2, [9,0,2,0,0,0])), None,
+    ]));
     return (tilemap, tiles, 4);
 }
 
@@ -218,10 +228,16 @@ pub fn stairs_3d() -> (String, Vec<WfcTile>, u32) {
 //        angle: 0,
 //        is_rotatable: true,
 //    });
+    // 3d stairs
+    let mut conn = 1000;
+    tiles.extend(create_big_tile(&mut conn, (1,1,2), vec![
+        Some((1, [1,0,0,0,0,0])), // stairs
+        Some((0, [0,0,1,0,0,0])), // empty
+    ]));
     return (tilemap, tiles, 0);
 }
 
-pub fn stairs_3d_path() -> (String, Vec<WfcTile>, u32) {
+pub fn stairs_3d_path() -> (String, Vec<WfcTile>, u32, WfcTile) {
     let tilemap = String::from("");
 
     let mut tiles = Vec::new();
@@ -247,12 +263,19 @@ pub fn stairs_3d_path() -> (String, Vec<WfcTile>, u32) {
         is_rotatable: true,
     });
     // deadend
-    tiles.push(WfcTile {
+    let deadend = WfcTile {
         index: 4,
         connection_types: [1,0,0,0,0,0],
         angle: 0,
         is_rotatable: true,
-    });
-    return (tilemap, tiles, 0);
+    };
+
+    // 3d stairs
+    let mut conn = 1000;
+    tiles.extend(create_big_tile(&mut conn, (1,1,2), vec![
+        Some((1, [1,0,0,0,0,0])), // stairs
+        Some((0, [0,0,1,0,0,0])), // empty
+    ]));
+    return (tilemap, tiles, 0, deadend);
 }
 

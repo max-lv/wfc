@@ -165,26 +165,10 @@ impl Worldmap {
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    pub fn tmp_iter(&self) -> impl Iterator<Item = Position> {
-        let mut values = Vec::<Position>::with_capacity(self.len);
-        for x in 0..self.size[0] {
-        for y in 0..self.size[1] {
-        for z in 0..self.size[2] {
-            values.push([x,y,z]);
-        }
-        }
-        }
-        return values.into_iter();
-    }
-
     pub fn move_(&self, square: Position, dir: &Direction) -> Option<Position> {
         let (dx, dy, dz) = match dir {
             Direction::NORTH => ( 0, -1,  0),
-            Direction::EAST  => (-1,  0,  0), // FIXME: ??? for some reason EAST and WEST switched around, 
+            Direction::EAST  => (-1,  0,  0), // FIXME: ??? for some reason EAST and WEST switched around,
             Direction::SOUTH => ( 0,  1,  0), //        now it should go counter-clockwise
             Direction::WEST  => ( 1,  0,  0),
             Direction::UP    => ( 0,  0,  1),
@@ -296,16 +280,21 @@ pub struct WFC {
     pub worldmap: Worldmap,
     pub seed: u64,
     rng: rand::rngs::StdRng,
+    squares_list: Vec<[usize;3]>,
+    squares_index: usize,
 }
 
 impl WFC {
     // TODO: worldmap should hold indexes into tiles
     pub fn init(worldmap: Worldmap, tiles: Vec<WfcTile>, seed: u64) -> WFC {
+        let [XS,YS,ZS] = worldmap.size;
         let mut wfc = WFC {
             tiles,
             worldmap,
             rng: rand::rngs::StdRng::seed_from_u64(seed),
             seed,
+            squares_list: (0..ZS).map(|z|(0..YS).map(move |y|(0..XS).map(move |x|[x,y,z]))).flatten().flatten().collect(),
+            squares_index: 0,
         };
         wfc.init_worldmap();
         wfc
@@ -353,6 +342,33 @@ impl WFC {
         for i in 0..self.worldmap.len {
             WFC::init_tile(&self.tiles, &mut self.worldmap[i]);
         }
+        self.squares_index = 0;
+    }
+
+    pub fn surround_worldmap(&mut self, tile: &WfcTile) -> Result<(), String> {
+        let [x_size, y_size, z_size] = self.worldmap.size;
+        for x in 0..x_size {
+        for y in 0..y_size {
+        for z in 0..z_size {
+            if x == 0 || y == 0 || z == 0 || x == x_size - 1 || y == y_size - 1 || z == z_size - 1 {
+                self.add_tile([x,y,z], *tile)?;
+            }
+        }
+        }
+        }
+        Ok(())
+    }
+
+    pub fn surround_worldmap_2d(&mut self, tile: &WfcTile) -> Result<(), String> {
+        let [x_size, y_size, _] = self.worldmap.size;
+        for x in 0..x_size {
+        for y in 0..y_size {
+            if x == 0 || y == 0 || x == x_size - 1 || y == y_size - 1 {
+                self.add_tile([x,y,0], *tile)?;
+            }
+        }
+        }
+        Ok(())
     }
 
     #[allow(non_snake_case)]
@@ -371,18 +387,15 @@ impl WFC {
         }
     }
 
-    fn find_squares_in_order(&self) -> Vec::<Position> {
-        let mut available_squares = Vec::<Position>::with_capacity(1);
-        for square in self.worldmap.tmp_iter() {
-            if self.worldmap[square].len() == 1 {
+    fn get_next_square(&mut self) -> Option<Position> {
+        loop {
+            let square = self.squares_list.get(self.squares_index)?;
+            self.squares_index += 1;
+            if self.worldmap[*square].len() == 1 {
                 continue;
             }
-            available_squares.push(square);
-            return available_squares;
+            return Some(*square)
         }
-
-        // always empty:
-        return available_squares;
     }
 
     pub fn add_tile(&mut self, square: Position, tile: WfcTile) -> Result<(), String> {
@@ -422,12 +435,13 @@ impl WFC {
     }
 
     pub fn collapse(&mut self) -> Option<Position> {
-        let available_squares = self.find_squares_in_order();
+        let square = self.get_next_square()?;
 
-        if available_squares.len() == 0 {
-            return None
-        }
-        let square = *choose_random(&mut self.rng, &available_squares);
+//        if available_squares.len() == 0 {
+//            return None
+//        }
+//        //let square = *choose_random(&mut self.rng, &available_squares);
+//        let square = available_squares[0];
 
         // observe
         let selected_tile = *choose_random(&mut self.rng, &self.worldmap[square]);

@@ -29,7 +29,7 @@ const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
 const WIN_WIDTH: u32 = 1290;
 const WIN_HEIGHT: u32 = 720;
 //const MAP_SIZE: (usize, usize, usize) = ((WIN_WIDTH/TILESIZE/SCALE) as usize, (WIN_HEIGHT/TILESIZE/SCALE) as usize, 1);
-const MAP_SIZE: (usize, usize, usize) = (7, 7, 17);
+const MAP_SIZE: (usize, usize, usize) = (20, 20, 20);
 //const MAP_SIZE: (usize, usize, usize) = (1, 1, 1);
 
 const CON_TYPE_COLORS: [Color;3] = [
@@ -155,26 +155,6 @@ fn test_path(worldmap: Worldmap, seed: u64, size: (usize, usize)) -> (WFC, Vec<W
 pub fn main() {
     better_panic::install();
 
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let ttf_context = sdl2::ttf::init().unwrap();
-
-    let window = video_subsystem.window("rust-sdl2 demo", WIN_WIDTH, WIN_HEIGHT)
-        .position_centered()
-        .build()
-        .unwrap();
-
-    let mut canvas = window.into_canvas().build().unwrap();
-
-    canvas.set_draw_color(Color::RGB(155, 155, 155));
-    canvas.clear();
-    canvas.present();
-    let mut event_pump = sdl_context.event_pump().unwrap();
-    let texture_creator: TextureCreator<sdl2::video::WindowContext> = canvas.texture_creator();
-
-    // load font
-    let font = ttf_context.load_font("/home/terra/.local/share/fonts/Ubuntu-B.ttf", 128).unwrap();
-
     let mut seed = STARTING_SEED;
     let (x_size, y_size, z_size) = MAP_SIZE;
     let worldmap = Worldmap::new3d(x_size, y_size, z_size);
@@ -185,47 +165,17 @@ pub fn main() {
     //let (tilemap_path, tiles, tilemap_size) = pipes();
     //let (tilemap_path, tiles, tilemap_size) = flat_city();
     let (tilemap_path, mut tiles, tilemap_size) = stairs_3d();
-    let (tilemap_path, mut tiles, tilemap_size) = stairs_3d_path();
-
-    // TODO:
-    // + add Z direction
-    // + 3d (replace stairs hack with bigtile)
-
-    let mut conn = 1000;
-    // pipes
-//    tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
-//        Some((4*2+0, [0,2,0,0,0,0])), Some((4*2+1, [0,0,0,1,0,0])),
-//        Some((4*3+0, [0,1,0,0,0,0])), Some((4*3+1, [0,0,0,2,0,0])),
-//    ]));
-//    tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
-//        Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [0,9,0,1,0,0])),
-//        Some((4*3+2, [9,0,2,0,0,0])), None,
-//    ]));
-
-    let deadend = tiles.pop().unwrap();
-    // 3d stairs
-    tiles.extend(create_big_tile(&mut conn, (1,1,2), vec![
-        Some((1, [1,0,0,0,0,0])), // stairs
-        Some((0, [0,0,1,0,0,0])), // empty
-    ]));
+//    let (tilemap_path, mut tiles, tilemap_size, deadend) = stairs_3d_path();
 
 
     let mut wfc = WFC::init(worldmap, tiles.clone(), seed);
 
-    // surround worldmap with empty tiles
-    let empty_tile = tiles[0];
-    let (x_size, y_size, z_size) = MAP_SIZE;
-    for x in 0..x_size {
-    for y in 0..y_size {
-    for z in 0..z_size {
-        if x == 0 || y == 0 || z == 0 || x == x_size - 1 || y == y_size - 1 || z == z_size {
-            wfc.add_tile([x,y,z], empty_tile).unwrap();
-        }
-    }
-    }
-    }
-    wfc.add_tile([3,3,1], deadend).unwrap();
-    wfc.add_tile([3,3,15], deadend).unwrap();
+//    // surround worldmap with empty tiles
+//    let empty_tile = tiles[0];
+//    wfc.surround_worldmap(&empty_tile);
+//    // add starting points
+//    wfc.add_tile([3,3,1], deadend).unwrap();
+//    wfc.add_tile([3,3,15], deadend).unwrap();
 
     let initial_worldmap = wfc.worldmap.clone();
 
@@ -259,6 +209,28 @@ pub fn main() {
         wfc.print_worldmap();
         return;
     }
+
+    return;
+
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+    let ttf_context = sdl2::ttf::init().unwrap();
+
+    let window = video_subsystem.window("rust-sdl2 demo", WIN_WIDTH, WIN_HEIGHT)
+        .position_centered()
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().build().unwrap();
+
+    canvas.set_draw_color(Color::RGB(155, 155, 155));
+    canvas.clear();
+    canvas.present();
+    let mut event_pump = sdl_context.event_pump().unwrap();
+    let texture_creator: TextureCreator<sdl2::video::WindowContext> = canvas.texture_creator();
+
+    // load font
+    let font = ttf_context.load_font("/home/terra/.local/share/fonts/Ubuntu-B.ttf", 128).unwrap();
 
     let tilemap = texture_creator.load_texture(tilemap_path).unwrap();
     let mut error_lock = false;
