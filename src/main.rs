@@ -19,17 +19,17 @@ use tilesets::*;
 
 const SHOW_CONNECTIONS: bool = false;
 const SHOW_TILESET: bool = false;
-const AUTO_TRY: bool = false;
+const AUTO_TRY: bool = true;
 const STOP_ON_SUCCESS: bool = true;
 const STARTING_SEED: u64 = 204;
 
 const TILESIZE: u32 = 10;
 const SCALE: u32 = 3;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
-const WIN_WIDTH: u32 = 1280;
+const WIN_WIDTH: u32 = 1290;
 const WIN_HEIGHT: u32 = 720;
-const MAP_SIZE: (usize, usize, usize) = ((WIN_WIDTH/TILESIZE/SCALE) as usize, (WIN_HEIGHT/TILESIZE/SCALE) as usize, 1);
-//const MAP_SIZE: (usize, usize, usize) = (10, 10, 7);
+//const MAP_SIZE: (usize, usize, usize) = ((WIN_WIDTH/TILESIZE/SCALE) as usize, (WIN_HEIGHT/TILESIZE/SCALE) as usize, 1);
+const MAP_SIZE: (usize, usize, usize) = (7, 7, 17);
 //const MAP_SIZE: (usize, usize, usize) = (1, 1, 1);
 
 const CON_TYPE_COLORS: [Color;3] = [
@@ -184,32 +184,48 @@ pub fn main() {
     let (tilemap_path, mut tiles, tilemap_size) = pipes();
     //let (tilemap_path, tiles, tilemap_size) = pipes();
     //let (tilemap_path, tiles, tilemap_size) = flat_city();
-    //let (tilemap_path, tiles) = stairs_3d();
+    let (tilemap_path, mut tiles, tilemap_size) = stairs_3d();
+    let (tilemap_path, mut tiles, tilemap_size) = stairs_3d_path();
 
     // TODO:
-    // - show window (aka see results)
-    //   + pipes with cross-tile
-    //   - pipes with L-tile
-    //   - pipes with both big-tiles
-    // - add Z direction
-    // - 3d (replace stairs hack with bigtile)
-    // - extract function
+    // + add Z direction
+    // + 3d (replace stairs hack with bigtile)
 
     let mut conn = 1000;
-    tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
-        Some((4*2+0, [0,2,0,0,0,0])), Some((4*2+1, [0,0,0,1,0,0])),
-        Some((4*3+0, [0,1,0,0,0,0])), Some((4*3+1, [0,0,0,2,0,0])),
-    ]));
-    //tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
-    //    Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [2,9,2,1,0,0])),
-    //    Some((4*3+2, [9,0,1,0,0,0])), None,
-    //]));
-    tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
-        Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [0,9,0,1,0,0])),
-        Some((4*3+2, [9,0,2,0,0,0])), None,
+    // pipes
+//    tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
+//        Some((4*2+0, [0,2,0,0,0,0])), Some((4*2+1, [0,0,0,1,0,0])),
+//        Some((4*3+0, [0,1,0,0,0,0])), Some((4*3+1, [0,0,0,2,0,0])),
+//    ]));
+//    tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
+//        Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [0,9,0,1,0,0])),
+//        Some((4*3+2, [9,0,2,0,0,0])), None,
+//    ]));
+
+    let deadend = tiles.pop().unwrap();
+    // 3d stairs
+    tiles.extend(create_big_tile(&mut conn, (1,1,2), vec![
+        Some((1, [1,0,0,0,0,0])), // stairs
+        Some((0, [0,0,1,0,0,0])), // empty
     ]));
 
+
     let mut wfc = WFC::init(worldmap, tiles.clone(), seed);
+
+    // surround worldmap with empty tiles
+    let empty_tile = tiles[0];
+    let (x_size, y_size, z_size) = MAP_SIZE;
+    for x in 0..x_size {
+    for y in 0..y_size {
+    for z in 0..z_size {
+        if x == 0 || y == 0 || z == 0 || x == x_size - 1 || y == y_size - 1 || z == z_size {
+            wfc.add_tile([x,y,z], empty_tile).unwrap();
+        }
+    }
+    }
+    }
+    wfc.add_tile([3,3,1], deadend).unwrap();
+    wfc.add_tile([3,3,15], deadend).unwrap();
 
     let initial_worldmap = wfc.worldmap.clone();
 

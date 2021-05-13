@@ -183,20 +183,6 @@ pub fn stairs_3d() -> (String, Vec<WfcTile>, u32) {
         angle: 0,
         is_rotatable: true,
     });
-    // stairs empty
-    tiles.push(WfcTile {
-        index: 5,
-        connection_types: [0,0,1,0,0,2],
-        angle: 0,
-        is_rotatable: true,
-    });
-    // stairs
-    tiles.push(WfcTile {
-        index: 1,
-        connection_types: [1,0,0,0,2,0],
-        angle: 0,
-        is_rotatable: true,
-    });
     // line
     tiles.push(WfcTile {
         index: 2,
@@ -218,13 +204,55 @@ pub fn stairs_3d() -> (String, Vec<WfcTile>, u32) {
         angle: 0,
         is_rotatable: true,
     });
+    // corner
+    tiles.push(WfcTile {
+        index: 5,
+        connection_types: [1,1,0,0,0,0],
+        angle: 0,
+        is_rotatable: true,
+    });
 //    // debug
 //    tiles.push(WfcTile {
-//        index: 5,
+//        index: 6,
 //        connection_types: [0,0,0,0,3,2],
 //        angle: 0,
 //        is_rotatable: true,
 //    });
+    return (tilemap, tiles, 0);
+}
+
+pub fn stairs_3d_path() -> (String, Vec<WfcTile>, u32) {
+    let tilemap = String::from("");
+
+    let mut tiles = Vec::new();
+    // empty
+    tiles.push(WfcTile {
+        index: 0,
+        connection_types: [0,0,0,0,0,0],
+        angle: 0,
+        is_rotatable: true,
+    });
+    // line
+    tiles.push(WfcTile {
+        index: 2,
+        connection_types: [1,0,1,0,0,0],
+        angle: 0,
+        is_rotatable: true,
+    });
+    // corner
+    tiles.push(WfcTile {
+        index: 5,
+        connection_types: [1,1,0,0,0,0],
+        angle: 0,
+        is_rotatable: true,
+    });
+    // deadend
+    tiles.push(WfcTile {
+        index: 4,
+        connection_types: [1,0,0,0,0,0],
+        angle: 0,
+        is_rotatable: true,
+    });
     return (tilemap, tiles, 0);
 }
 

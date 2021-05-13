@@ -70,11 +70,15 @@ pub fn create_big_tile(gen_con: &mut usize, size: (usize, usize, usize), big_til
         }).collect::<Vec<Option<WfcTile>>>();
     let (x_size, y_size, z_size) = size;
 
+    // idea is: take previous (ppos) tile position in each direction
+    // if such tile exists (not None) then connect them with special connection.
     for y in 0..y_size {
     for x in 0..x_size {
-        let pos = y*x_size + x;
+    for z in 0..z_size {
+        let pos = y*x_size + z*x_size*y_size + x;
         let x = x as i32;
         let y = y as i32;
+        let z = z as i32;
 
         if wfc_big_tile[pos] == None {
             continue;
@@ -82,7 +86,7 @@ pub fn create_big_tile(gen_con: &mut usize, size: (usize, usize, usize), big_til
 
         // north
         if y-1 >= 0 && y-1 < y_size as i32 {
-            let ppos = (y as usize -1)*x_size + x as usize;
+            let ppos = ((y as usize -1) * x_size) + (z as usize * x_size * y_size) + x as usize;
             // generate connection
             if wfc_big_tile[ppos] != None {
                 wfc_big_tile[ pos].as_mut().unwrap().connection_types[0] = *gen_con; // north
@@ -93,7 +97,7 @@ pub fn create_big_tile(gen_con: &mut usize, size: (usize, usize, usize), big_til
 
         // west
         if x-1 >= 0 && x-1 < x_size as i32 {
-            let ppos = y as usize * x_size + x as usize - 1;
+            let ppos = (y as usize * x_size) + (z as usize * x_size * y_size) + x as usize - 1;
             // generate connection
             if wfc_big_tile[ppos] != None {
                 wfc_big_tile[ pos].as_mut().unwrap().connection_types[1] = *gen_con; // west
@@ -103,8 +107,24 @@ pub fn create_big_tile(gen_con: &mut usize, size: (usize, usize, usize), big_til
         }
 
         // up
-        // TODO
+        if z-1 >= 0 && z-1 < z_size as i32 {
+            let ppos = (y as usize * x_size) + ((z-1) as usize * x_size * y_size) + x as usize;
+            println!("pos {}  ppos {}  z-1 {}  z {}", pos, ppos, ((z-1) as usize * x_size * y_size), z);
+            // generate connection
+            if wfc_big_tile[ppos] != None {
+                wfc_big_tile[ pos].as_mut().unwrap().connection_types[5] = *gen_con; // down
+                wfc_big_tile[ppos].as_mut().unwrap().connection_types[4] = *gen_con; // up
+                *gen_con += 1;
+            }
+        }
     }
+    }
+    }
+
+    for tile in &wfc_big_tile {
+        if let Some(tile) = tile {
+            println!("{:?}", tile);
+        }
     }
 
     // add rotations
@@ -123,7 +143,6 @@ pub fn create_big_tile(gen_con: &mut usize, size: (usize, usize, usize), big_til
                     tile.connection_types[i] *= rot+1;
                 }
             }
-            println!("{:?}", tile);
             rv.push(tile)
         }
     }
