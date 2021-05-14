@@ -42,7 +42,7 @@ impl WfcTile {
         if arr[5] != 0 {
             down_dir = arr[5] + (rot+1)*1000;
         }
-        self.connection_types = [arr[rot % 4], arr[(rot+1) % 4], arr[(rot+2) % 4], arr[(rot+3) % 4], up_dir, down_dir];
+        self.connection_types = [arr[(rot+3) % 4], arr[(rot+2) % 4], arr[(rot+1) % 4], arr[rot % 4], up_dir, down_dir];
         return self;
     }
 }
@@ -168,9 +168,9 @@ impl Worldmap {
     pub fn move_(&self, square: Position, dir: &Direction) -> Option<Position> {
         let (dx, dy, dz) = match dir {
             Direction::NORTH => ( 0, -1,  0),
-            Direction::EAST  => (-1,  0,  0), // FIXME: ??? for some reason EAST and WEST switched around,
-            Direction::SOUTH => ( 0,  1,  0), //        now it should go counter-clockwise
-            Direction::WEST  => ( 1,  0,  0),
+            Direction::EAST  => ( 1,  0,  0),
+            Direction::SOUTH => ( 0,  1,  0),
+            Direction::WEST  => (-1,  0,  0),
             Direction::UP    => ( 0,  0,  1),
             Direction::DOWN  => ( 0,  0, -1),
         };
@@ -303,6 +303,7 @@ impl WFC {
     pub fn init_rng(&mut self, seed: u64) {
         self.seed = seed;
         self.rng = rand::rngs::StdRng::seed_from_u64(seed);
+        self.squares_index = 0;
     }
 
     fn init_tile(tiles: &Vec<WfcTile>, square: &mut Vec<WfcTile>) {
@@ -342,7 +343,6 @@ impl WFC {
         for i in 0..self.worldmap.len {
             WFC::init_tile(&self.tiles, &mut self.worldmap[i]);
         }
-        self.squares_index = 0;
     }
 
     pub fn surround_worldmap(&mut self, tile: &WfcTile) -> Result<(), String> {

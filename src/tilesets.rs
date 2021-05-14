@@ -31,20 +31,20 @@ pub fn pipes() -> (String, Vec<WfcTile>, u32) {
     });
     tiles.push(WfcTile {
         index: 4*1 + 1, // col: 1, row: 1,
-        connection_types: [0,0,1,1,0,0],
+        connection_types: [0,1,1,0,0,0],
         angle: 0,
         is_rotatable: true,
     });
     // connecting pipe
     tiles.push(WfcTile {
         index: 4*1 + 2, // col: 2, row: 1,
-        connection_types: [0,1,0,2,0,0],
+        connection_types: [0,2,0,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
     tiles.push(WfcTile {
         index: 4*0 + 3, // col: 3, row: 0,
-        connection_types: [0,0,2,2,0,0],
+        connection_types: [0,2,2,0,0,0],
         angle: 0,
         is_rotatable: true,
     });
@@ -91,7 +91,7 @@ pub fn flat_city() -> (String, Vec<WfcTile>, u32) {
     });
     tiles.push(WfcTile {
         index: 8*0 + 3,
-        connection_types: [1,1,0,0,0,0],
+        connection_types: [1,0,0,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
@@ -110,14 +110,14 @@ pub fn flat_city() -> (String, Vec<WfcTile>, u32) {
     });
     tiles.push(WfcTile {
         index: 8*1 + 1,
-        connection_types: [1,1,2,2,0,0],
+        connection_types: [1,2,2,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
     // fat blocks
     tiles.push(WfcTile {
         index: 8*1 + 2,
-        connection_types: [1,1,3,3,0,0],
+        connection_types: [1,3,3,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
@@ -136,7 +136,7 @@ pub fn flat_city() -> (String, Vec<WfcTile>, u32) {
     });
     tiles.push(WfcTile {
         index: 8*0 + 5,
-        connection_types: [1,0,1,1,0,0],
+        connection_types: [1,1,1,0,0,0],
         angle: 0,
         is_rotatable: true,
     });
@@ -168,13 +168,13 @@ pub fn flat_city_paths_only() -> (String, Vec<WfcTile>, u32) {
     });
     tiles.push(WfcTile {
         index: 8*0 + 3,
-        connection_types: [1,1,0,0,0,0],
+        connection_types: [1,0,0,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
     tiles.push(WfcTile {
         index: 8*0 + 5,
-        connection_types: [1,0,1,1,0,0],
+        connection_types: [1,1,1,0,0,0],
         angle: 0,
         is_rotatable: true,
     });
@@ -203,7 +203,7 @@ pub fn stairs_3d() -> (String, Vec<WfcTile>, u32) {
     // T-junction
     tiles.push(WfcTile {
         index: 3,
-        connection_types: [1,1,1,0,0,0],
+        connection_types: [1,0,1,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
@@ -217,7 +217,7 @@ pub fn stairs_3d() -> (String, Vec<WfcTile>, u32) {
     // corner
     tiles.push(WfcTile {
         index: 5,
-        connection_types: [1,1,0,0,0,0],
+        connection_types: [1,0,0,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
@@ -258,7 +258,7 @@ pub fn stairs_3d_path() -> (String, Vec<WfcTile>, u32, WfcTile) {
     // corner
     tiles.push(WfcTile {
         index: 5,
-        connection_types: [1,1,0,0,0,0],
+        connection_types: [1,0,0,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
