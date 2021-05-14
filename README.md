@@ -1,4 +1,6 @@
 
+<img src="https://raw.githubusercontent.com/max-lv/wfc/master/screenshot.png" alt="Screenshot of program window with pipes tileset collapse in progress" width="700">
+
 # About
 
 Yet another Rust implementation of Wave Function Collapse (https://github.com/mxgmn/WaveFunctionCollapse).
