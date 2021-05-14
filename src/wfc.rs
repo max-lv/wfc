@@ -253,10 +253,12 @@ impl std::ops::IndexMut<Position> for Worldmap {
 
 
 type Position = [usize; 3];
+
+#[derive(Debug, Clone)]
 pub enum Direction {NORTH, EAST, SOUTH, WEST, UP, DOWN}
 
 impl Direction {
-    fn flip(&self) -> Direction {
+    pub fn flip(&self) -> Direction {
         match self {
             Direction::NORTH => Direction::SOUTH,
             Direction::EAST  => Direction::WEST,
@@ -264,6 +266,20 @@ impl Direction {
             Direction::SOUTH => Direction::NORTH,
             Direction::WEST  => Direction::EAST,
             Direction::DOWN  => Direction::UP,
+        }
+    }
+}
+
+impl From<usize> for Direction {
+    fn from(item: usize) -> Self {
+        match item {
+            0 => Direction::NORTH,
+            1 => Direction::EAST,
+            2 => Direction::SOUTH,
+            3 => Direction::WEST,
+            4 => Direction::UP,
+            5 => Direction::DOWN,
+            _ => panic!("{} cannot be converted to Direction", item),
         }
     }
 }
@@ -286,7 +302,7 @@ pub struct WFC {
     pub worldmap: Worldmap,
     pub seed: u64,
     rng: rand::rngs::StdRng,
-    squares_list: Vec<[usize;3]>,
+    pub squares_list: Vec<[usize;3]>,
     squares_index: usize,
 }
 

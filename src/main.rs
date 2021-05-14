@@ -23,14 +23,14 @@ const AUTO_TRY: bool = false;
 const STOP_ON_SUCCESS: bool = true;
 const STARTING_SEED: u64 = 204;
 
-const TILESIZE: u32 = 10;
+const TILESIZE: u32 = 8;
 const SCALE: u32 = 8;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
 const WIN_WIDTH: u32 = 1290;
 const WIN_HEIGHT: u32 = 720;
-const MAP_SIZE: (usize, usize, usize) = ((WIN_WIDTH/TILESIZE/SCALE) as usize, (WIN_HEIGHT/TILESIZE/SCALE) as usize, 1);
+//const MAP_SIZE: (usize, usize, usize) = ((WIN_WIDTH/TILESIZE/SCALE) as usize, (WIN_HEIGHT/TILESIZE/SCALE) as usize, 1);
 //const MAP_SIZE: (usize, usize, usize) = (20, 20, 20);
-//const MAP_SIZE: (usize, usize, usize) = (1, 1, 1);
+const MAP_SIZE: (usize, usize, usize) = (10, 10, 1);
 
 const CON_TYPE_COLORS: [Color;4] = [
     Color::RED,
@@ -142,18 +142,17 @@ fn test_path(worldmap: Worldmap, seed: u64, size: (usize, usize)) -> (WFC, Vec<W
     let mut wfc = WFC::init(worldmap, ttiles, seed);
 
     wfc.add_tile([2,2,0], *tiles[3].clone().rotate(2)).unwrap();
-    wfc.add_tile([9,9,0], tiles[3]).unwrap();
+    wfc.add_tile([8,8,0], tiles[3]).unwrap();
 
     let (x_size, y_size) = size;
     for x in 0..x_size {
         for y in 0..y_size {
             if x == 0 || y == 0 || x == x_size-1 || y == y_size-1 {
-            wfc.worldmap[[x,y,0]].clear();
-            wfc.worldmap[[x,y,0]].push(tiles[0]);
-            wfc.propagate([x,y,0]);
+                wfc.add_tile([x,y,0], tiles[0]).unwrap();
             }
         }
     }
+
     return (wfc, tiles, tilemap_path, tilemap_size)
 }
 
@@ -165,14 +164,14 @@ pub fn main() {
     let worldmap = Worldmap::new3d(x_size, y_size, z_size);
     println!("worldmap: {} {:?}", worldmap.len, worldmap.size);
 
-    //let (mut wfc, tiles, tilemap_path, tilemap_size) = test_path(worldmap, seed, (x_size, y_size));
-    let (tilemap_path, mut tiles, tilemap_size) = pipes();
-    //let (tilemap_path, tiles, tilemap_size) = flat_city();
+    let (mut wfc, _, tilemap_path, tilemap_size) = test_path(worldmap, seed, (x_size, y_size));
+//    let (tilemap_path, mut tiles, tilemap_size) = pipes();
+    let (tilemap_path, tiles, tilemap_size) = flat_city();
     //let (tilemap_path, mut tiles, tilemap_size) = stairs_3d();
 //    let (tilemap_path, mut tiles, tilemap_size, deadend) = stairs_3d_path();
 
 
-    let mut wfc = WFC::init(worldmap, tiles.clone(), seed);
+//    let mut wfc = WFC::init(worldmap, tiles.clone(), seed);
 
 //    // surround worldmap with empty tiles
 //    let empty_tile = tiles[0];
@@ -182,6 +181,56 @@ pub fn main() {
 //    wfc.add_tile([3,3,15], deadend).unwrap();
 
     let initial_worldmap = wfc.worldmap.clone();
+    let mut stage = 0;
+
+
+/// Removes tiles from `square` stack which do not allow path from `dir` to `other_dir`
+fn preserve_path(wfc: &mut WFC, roads: &Vec<usize>, square: &[usize; 3], dir: Direction, other_dir: Direction) {
+    let dir: usize = dir.into();
+    let other_dir: usize = other_dir.into();
+
+    wfc.worldmap[*square].retain(|&x|
+        roads.contains(&x.connection_types[dir])
+        && roads.contains(&x.connection_types[other_dir]));
+    wfc.propagate(*square);
+}
+
+/// like preserve_path, but also preserve walls between immidieate neighbours.
+fn preserve_connections(wfc: &mut WFC, path_squares: &Vec<[usize; 3]>, roads: &Vec<usize>, walls: &Vec<usize>, square: &[usize; 3], dir: Direction, other_dir: Direction) {
+    let dir: usize = dir.into();
+    let other_dir: usize = other_dir.into();
+
+    let keep_connections = &mut [false, false, false, false, false, false];
+    for i in 0..6 {
+        if let Some(sq) = wfc.worldmap.move_(*square, &Direction::from(i)) {
+            keep_connections[i] = path_squares.contains(&sq);
+        }
+    }
+
+    wfc.worldmap[*square].retain(|&tile| {
+        // keep only tiles which:
+        // - `dir` & `other_dir` directions have `roads` connections
+        //   AND in keep_connections (excl. dir and other_dir) have
+        //   `walls` connections.
+        for i in 0..6 {
+            // road directions
+            if i == dir || i == other_dir {
+                if !roads.contains(&tile.connection_types[i]) {
+                    return false;
+                }
+            // walls direction
+            } else if keep_connections[i] {
+                if !walls.contains(&tile.connection_types[i]) {
+                    return false;
+                }
+            } else {
+                // any connections are ok
+            }
+        }
+        return true;
+    });
+    wfc.propagate(*square);
+}
 
     if AUTO_TRY {
         let interupt_flag = Arc::new(AtomicBool::new(false));
@@ -236,6 +285,8 @@ pub fn main() {
 
     let tilemap = texture_creator.load_texture(tilemap_path).unwrap();
     let mut error_lock = false;
+    let mut main_path = Vec::<([usize;3], Direction, Direction)>::new();
+    let mut main_path_squares = Vec::<[usize;3]>::new();
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -262,10 +313,12 @@ pub fn main() {
                     wfc.worldmap = initial_worldmap.clone();
                     seed += 1;
                     wfc.init_rng(seed);
+                    stage = 0;
                     println!("-- seed {} --", seed);
                 },
                 Event::KeyDown { keycode: Some(Keycode::R), .. } => {
                     wfc.worldmap = initial_worldmap.clone();
+                    stage = 0;
                     wfc.init_rng(seed);
                     error_lock = false;
                     println!("-- seed {} --", seed);
@@ -281,6 +334,80 @@ pub fn main() {
                         },
                         _ => (),
                     };
+                },
+                Event::KeyDown { keycode: Some(Keycode::O), .. } => {
+                    match stage {
+                        0 => {
+                            println!("stage 0 | generate path");
+                            wfc.run_until_success();
+                        },
+                        1 => {
+                            println!("stage 1 | find path");
+                            // replace all tiles not part of main path with empty
+                            let deadend_square = [2,2,0];
+                            let follow_conn = 0;
+                            let mut square = deadend_square;
+                            main_path.clear();
+                            main_path_squares.clear();
+                            main_path_squares.push(square);
+                            let mut last_dir = 99;
+                            'outer: loop {
+                                //println!("{:?}", wfc.worldmap[square][0].connection_types);
+                                for i in 0..4 {
+                                    let val = &wfc.worldmap[square][0].connection_types[i];
+                                    if val == &follow_conn && last_dir != i {
+                                        let dir = Direction::from(i);
+                                        //println!("follow {} {:?} {:?}", i, dir, square);
+                                        if last_dir != 99 {
+                                            main_path.push((square, dir.clone(), Direction::from(last_dir)));
+                                        }
+                                        main_path_squares.push(square);
+                                        square = wfc.worldmap.move_(square, &dir).unwrap();
+                                        last_dir = dir.flip().into();
+                                        //println!("new square {:?}", square);
+                                        continue 'outer;
+                                    }
+                                }
+                                break;
+                            }
+
+                            // visually show path
+                            for square in &wfc.squares_list {
+                                if main_path_squares.contains(square) {
+                                    continue;
+                                }
+                                wfc.worldmap[*square].clear();
+                            }
+                        },
+                        2 => {
+                            println!("stage 2 | recreate path as connections");
+                            wfc = WFC::init(Worldmap::new3d(x_size, y_size, z_size), tiles.clone(), seed);
+                            //wfc.worldmap = initial_worldmap.clone();
+                            // surround
+                            // TODO: move surround functions into worldmap
+                            wfc.surround_worldmap_2d(&tiles[0]).unwrap();
+
+                            // place deadends
+
+                            let roads = vec![0];
+                            let walls = vec![1];
+                            for (square, dir, other_dir) in &main_path {
+                                let _dir: usize = dir.clone().into();
+                                let _other_dir: usize = other_dir.clone().into();
+
+                                //preserve_path(&mut wfc, &roads, square, dir.clone(), other_dir.clone());
+                                preserve_connections(&mut wfc, &main_path_squares, &roads, &walls, &square, dir.clone(), other_dir.clone());
+                            }
+                        },
+                        3 => {
+                            println!("stage 3 | ");
+                            wfc.run_until_success();
+                        },
+                        _ => {
+                            println!("stage {} unknown", stage);
+                        }
+                    };
+                    stage += 1;
                 },
                 _ => {}
             }
