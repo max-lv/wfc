@@ -42,7 +42,13 @@ impl WfcTile {
         if arr[5] != 0 {
             down_dir = arr[5] + (rot+1)*1000;
         }
-        self.connection_types = [arr[(rot+3) % 4], arr[(rot+2) % 4], arr[(rot+1) % 4], arr[rot % 4], up_dir, down_dir];
+        self.connection_types = match rot % 4 {
+            0 => self.connection_types,
+            1 => [arr[3], arr[0], arr[1], arr[2], up_dir, down_dir],
+            2 => [arr[2], arr[3], arr[0], arr[1], up_dir, down_dir],
+            3 => [arr[1], arr[2], arr[3], arr[0], up_dir, down_dir],
+            _ => unreachable!(),
+        };
         return self;
     }
 }
@@ -100,8 +106,8 @@ pub fn create_big_tile(gen_con: &mut usize, size: (usize, usize, usize), big_til
             let ppos = (y as usize * x_size) + (z as usize * x_size * y_size) + x as usize - 1;
             // generate connection
             if wfc_big_tile[ppos] != None {
-                wfc_big_tile[ pos].as_mut().unwrap().connection_types[1] = *gen_con; // west
-                wfc_big_tile[ppos].as_mut().unwrap().connection_types[3] = *gen_con; // east
+                wfc_big_tile[ pos].as_mut().unwrap().connection_types[3] = *gen_con; // east
+                wfc_big_tile[ppos].as_mut().unwrap().connection_types[1] = *gen_con; // west
                 *gen_con += 1;
             }
         }

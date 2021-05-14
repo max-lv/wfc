@@ -5,30 +5,35 @@ pub fn pipes() -> (String, Vec<WfcTile>, u32) {
     let tilemap = String::from("./pipes_tileset.png");
 
     let mut tiles = Vec::new();
+    // T-junction
     tiles.push(WfcTile {
         index: 4*0 + 0, // col: 0, row: 0,
         connection_types: [1,1,0,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
+    // empty
     tiles.push(WfcTile {
         index: 4*0 + 2, // col: 2, row: 0,
         connection_types: [0,0,0,0,0,0],
         angle: 0,
         is_rotatable: true,
     });
+    // line
     tiles.push(WfcTile {
         index: 4*1 + 0, // col: 0, row: 1,
         connection_types: [0,1,0,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
+    // X-junction
     tiles.push(WfcTile {
         index: 4*0 + 1, // col: 1, row: 0,
         connection_types: [1,1,1,1,0,0],
         angle: 0,
         is_rotatable: true,
     });
+    // corner
     tiles.push(WfcTile {
         index: 4*1 + 1, // col: 1, row: 1,
         connection_types: [0,1,1,0,0,0],
@@ -42,12 +47,14 @@ pub fn pipes() -> (String, Vec<WfcTile>, u32) {
         angle: 0,
         is_rotatable: true,
     });
+    // _red corner
     tiles.push(WfcTile {
         index: 4*0 + 3, // col: 3, row: 0,
         connection_types: [0,2,2,0,0,0],
         angle: 0,
         is_rotatable: true,
     });
+    // _red line
     tiles.push(WfcTile {
         index: 4*1 + 3, // col: 3, row: 1,
         connection_types: [0,2,0,2,0,0],
@@ -57,11 +64,11 @@ pub fn pipes() -> (String, Vec<WfcTile>, u32) {
     // big-tiles
     let mut conn = 1000;
     tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
-        Some((4*2+0, [0,2,0,0,0,0])), Some((4*2+1, [0,0,0,1,0,0])),
-        Some((4*3+0, [0,1,0,0,0,0])), Some((4*3+1, [0,0,0,2,0,0])),
+        Some((4*2+0, [0,0,0,2,0,0])), Some((4*2+1, [0,1,0,0,0,0])),
+        Some((4*3+0, [0,0,0,1,0,0])), Some((4*3+1, [0,2,0,0,0,0])),
     ]));
     tiles.extend(create_big_tile(&mut conn, (2,2,1), vec![
-        Some((4*2+2, [0,0,9,9,0,0])), Some((4*2+3, [0,9,0,1,0,0])),
+        Some((4*2+2, [0,9,9,0,0,0])), Some((4*2+3, [0,1,0,9,0,0])),
         Some((4*3+2, [9,0,2,0,0,0])), None,
     ]));
     return (tilemap, tiles, 4);

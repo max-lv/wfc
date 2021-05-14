@@ -32,10 +32,11 @@ const WIN_HEIGHT: u32 = 720;
 const MAP_SIZE: (usize, usize, usize) = (20, 20, 20);
 //const MAP_SIZE: (usize, usize, usize) = (1, 1, 1);
 
-const CON_TYPE_COLORS: [Color;3] = [
+const CON_TYPE_COLORS: [Color;4] = [
     Color::RED,
     Color::CYAN,
     Color::YELLOW,
+    Color::BLUE,
 ];
 
 #[allow(unused_must_use)]
@@ -63,7 +64,6 @@ fn draw_outline_circle(canvas: &mut Canvas<Window>, x: u32, y: u32, r: i16, colo
     canvas.filled_circle(x as i16, y as i16, r-4, color);
 }
 
-
 fn draw_wfc_tile(canvas: &mut Canvas<Window>, tilemap: &Texture, wfc_tile: &WfcTile, size: u32, x: u32, y: u32) {
     let (col, row) = get_col_row(wfc_tile, size);
     draw_tile(canvas, &tilemap, col, row, x, y, wfc_tile.angle as f64);
@@ -76,10 +76,15 @@ fn draw_wfc_tile(canvas: &mut Canvas<Window>, tilemap: &Texture, wfc_tile: &WfcT
     let x = x*TILESIZE_SCALED;
     let y = y*TILESIZE_SCALED;
     let half = TILESIZE_SCALED/2;
-    draw_outline_circle(canvas, x+half, y, 10, CON_TYPE_COLORS[con_types[0]]);
-    draw_outline_circle(canvas, x + TILESIZE_SCALED, y+half, 10, CON_TYPE_COLORS[con_types[1]]);
-    draw_outline_circle(canvas, x+half, y + TILESIZE_SCALED, 10, CON_TYPE_COLORS[con_types[2]]);
-    draw_outline_circle(canvas, x, y+half, 10, CON_TYPE_COLORS[con_types[3]]);
+    let fifth = TILESIZE_SCALED/7;
+    if con_types[0] < CON_TYPE_COLORS.len()
+        { draw_outline_circle(canvas, x + half,                    y + fifth,                   10, CON_TYPE_COLORS[con_types[0] % CON_TYPE_COLORS.len()]); }
+    if con_types[1] < CON_TYPE_COLORS.len()
+        { draw_outline_circle(canvas, x + TILESIZE_SCALED - fifth, y + half,                    10, CON_TYPE_COLORS[con_types[1] % CON_TYPE_COLORS.len()]); }
+    if con_types[2] < CON_TYPE_COLORS.len()
+        { draw_outline_circle(canvas, x + half,                    y + TILESIZE_SCALED - fifth, 10, CON_TYPE_COLORS[con_types[2] % CON_TYPE_COLORS.len()]); }
+    if con_types[3] < CON_TYPE_COLORS.len()
+        { draw_outline_circle(canvas, x + fifth,                   y + half,                    10, CON_TYPE_COLORS[con_types[3] % CON_TYPE_COLORS.len()]); }
 }
 
 fn draw_text_in_rect<A>(canvas: &mut Canvas<Window>, font: &sdl2::ttf::Font, texture_creator: &TextureCreator<A>, rect: Rect, text: &str, color: Color) {
@@ -288,9 +293,11 @@ pub fn main() {
         canvas.set_draw_color(Color::RGB(135, 135, 135));
         canvas.clear();
 
-        if SHOW_TILESET {
-            for (i, tile) in tiles.iter().enumerate() {
-                draw_wfc_tile(&mut canvas, &tilemap, tile, tilemap_size, (i * 2) as u32, 4 as u32);
+        if SHOW_TILESET && wfc.worldmap[0].len() > 1 {
+            for (i, tile) in wfc.worldmap[0].iter().enumerate() {
+                let x = i % x_size;
+                let y = i / x_size;
+                draw_wfc_tile(&mut canvas, &tilemap, tile, tilemap_size, x as u32, y as u32);
             }
         } else {
             // draw world map
