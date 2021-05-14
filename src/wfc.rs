@@ -434,6 +434,7 @@ impl WFC {
                     // remove selected tile from list of available
                     worldmap_copy[square].retain(|&x| x != self.worldmap[square][0]);
                     self.worldmap = worldmap_copy.clone();
+                    self.squares_index -= 1;
                     println!("Backtracking for square {:?}", square);
                 },
             };
