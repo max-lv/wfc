@@ -77,9 +77,9 @@ fn draw_wfc_tile(canvas: &mut Canvas<Window>, tilemap: &Texture, wfc_tile: &WfcT
     let y = y*TILESIZE_SCALED;
     let half = TILESIZE_SCALED/2;
     draw_outline_circle(canvas, x+half, y, 10, CON_TYPE_COLORS[con_types[0]]);
-    draw_outline_circle(canvas, x, y+half, 10, CON_TYPE_COLORS[con_types[1]]);
+    draw_outline_circle(canvas, x + TILESIZE_SCALED, y+half, 10, CON_TYPE_COLORS[con_types[1]]);
     draw_outline_circle(canvas, x+half, y + TILESIZE_SCALED, 10, CON_TYPE_COLORS[con_types[2]]);
-    draw_outline_circle(canvas, x + TILESIZE_SCALED, y+half, 10, CON_TYPE_COLORS[con_types[3]]);
+    draw_outline_circle(canvas, x, y+half, 10, CON_TYPE_COLORS[con_types[3]]);
 }
 
 fn draw_text_in_rect<A>(canvas: &mut Canvas<Window>, font: &sdl2::ttf::Font, texture_creator: &TextureCreator<A>, rect: Rect, text: &str, color: Color) {
