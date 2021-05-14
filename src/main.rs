@@ -19,17 +19,17 @@ use tilesets::*;
 
 const SHOW_CONNECTIONS: bool = false;
 const SHOW_TILESET: bool = false;
-const AUTO_TRY: bool = true;
+const AUTO_TRY: bool = false;
 const STOP_ON_SUCCESS: bool = true;
 const STARTING_SEED: u64 = 204;
 
 const TILESIZE: u32 = 10;
-const SCALE: u32 = 3;
+const SCALE: u32 = 8;
 const TILESIZE_SCALED: u32 = TILESIZE * SCALE;
 const WIN_WIDTH: u32 = 1290;
 const WIN_HEIGHT: u32 = 720;
-//const MAP_SIZE: (usize, usize, usize) = ((WIN_WIDTH/TILESIZE/SCALE) as usize, (WIN_HEIGHT/TILESIZE/SCALE) as usize, 1);
-const MAP_SIZE: (usize, usize, usize) = (20, 20, 20);
+const MAP_SIZE: (usize, usize, usize) = ((WIN_WIDTH/TILESIZE/SCALE) as usize, (WIN_HEIGHT/TILESIZE/SCALE) as usize, 1);
+//const MAP_SIZE: (usize, usize, usize) = (20, 20, 20);
 //const MAP_SIZE: (usize, usize, usize) = (1, 1, 1);
 
 const CON_TYPE_COLORS: [Color;4] = [
@@ -167,9 +167,8 @@ pub fn main() {
 
     //let (mut wfc, tiles, tilemap_path, tilemap_size) = test_path(worldmap, seed, (x_size, y_size));
     let (tilemap_path, mut tiles, tilemap_size) = pipes();
-    //let (tilemap_path, tiles, tilemap_size) = pipes();
     //let (tilemap_path, tiles, tilemap_size) = flat_city();
-    let (tilemap_path, mut tiles, tilemap_size) = stairs_3d();
+    //let (tilemap_path, mut tiles, tilemap_size) = stairs_3d();
 //    let (tilemap_path, mut tiles, tilemap_size, deadend) = stairs_3d_path();
 
 
@@ -214,8 +213,6 @@ pub fn main() {
         wfc.print_worldmap();
         return;
     }
-
-    return;
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
